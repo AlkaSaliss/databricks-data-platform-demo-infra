@@ -9,7 +9,8 @@ include "root" {
 
 # Include environment-specific settings
 include "env" {
-  path = find_in_parent_folders("env.hcl")
+  path   = find_in_parent_folders("env.hcl")
+  expose = true
 }
 
 # Include region-specific settings
@@ -64,13 +65,16 @@ dependency "metastore" {
 
 # Pass region, dependency outputs, and workspace-specific wiring to Terraform
 inputs = {
-  region             = include.region.locals.aws_region
-  admin_group_id     = dependency.account_admin.outputs.admin_group.id
-  vpc_id             = dependency.network.outputs.vpc_id
-  subnet_ids         = dependency.network.outputs.subnets
-  security_group_ids = dependency.network.outputs.security_group_ids
-  metastore_id       = dependency.metastore.outputs.metastore_id
-  roles_to_assume    = [dependency.metastore.outputs.unity_catalog_iam_role_arn]
+  region                    = include.region.locals.aws_region
+  databricks_account_id     = include.env.locals.databricks_account_id
+  databricks_client_id      = include.env.locals.databricks_client_id
+  databricks_client_secret  = include.env.locals.databricks_client_secret
+  admin_group_id            = dependency.account_admin.outputs.admin_group.id
+  vpc_id                    = dependency.network.outputs.vpc_id
+  subnet_ids                = dependency.network.outputs.subnets
+  security_group_ids        = dependency.network.outputs.security_group_ids
+  metastore_id              = dependency.metastore.outputs.metastore_id
+  roles_to_assume           = [dependency.metastore.outputs.unity_catalog_iam_role_arn]
 }
 
 # Other variables are defined in terraform.tfvars file

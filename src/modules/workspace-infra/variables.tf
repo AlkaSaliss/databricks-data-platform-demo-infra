@@ -34,6 +34,11 @@ variable "security_group_ids" {
 variable "databricks_account_id" {
   type        = string
   description = "(Required) Databricks Account ID"
+
+  validation {
+    condition     = can(regex("^[a-f0-9-]{36}$", var.databricks_account_id))
+    error_message = "Databricks account ID must be a valid UUID."
+  }
 }
 
 variable "workspace_name" {
@@ -51,12 +56,22 @@ variable "databricks_client_id" {
   type        = string
   description = "(Required) Client ID to authenticate the Databricks provider at the account level"
   sensitive   = true
+
+  validation {
+    condition     = length(var.databricks_client_id) > 0
+    error_message = "Databricks client ID cannot be empty. Set DATABRICKS_CLIENT_ID before running Terragrunt."
+  }
 }
 
 variable "databricks_client_secret" {
   type        = string
   description = "(Required) Client secret to authenticate the Databricks provider at the account level"
   sensitive   = true
+
+  validation {
+    condition     = length(var.databricks_client_secret) > 0
+    error_message = "Databricks client secret cannot be empty. Set DATABRICKS_CLIENT_SECRET before running Terragrunt."
+  }
 }
 
 variable "admin_group_id" {

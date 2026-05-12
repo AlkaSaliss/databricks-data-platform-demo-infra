@@ -1,6 +1,7 @@
 variable "tags" {
   type        = map(string)
-  description = "(Required) Tags applied to the network resources"
+  description = "(Optional) Additional tags applied to the network resources"
+  default     = {}
 }
 
 variable "prefix" {

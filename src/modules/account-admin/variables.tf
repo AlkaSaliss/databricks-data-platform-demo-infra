@@ -139,9 +139,3 @@ variable "environment" {
     error_message = "Environment must be one of: dev, staging, prod."
   }
 }
-
-variable "additional_tags" {
-  description = "Additional tags to apply to all resources."
-  type        = map(string)
-  default     = {}
-}

@@ -7,7 +7,8 @@ include "root" {
 }
 
 include "env" {
-  path = find_in_parent_folders("env.hcl")
+  path   = find_in_parent_folders("env.hcl")
+  expose = true
 }
 
 include "region" {
@@ -16,5 +17,9 @@ include "region" {
 }
 
 inputs = {
-  region = include.region.locals.aws_region
+  region                    = include.region.locals.aws_region
+  databricks_account_id     = include.env.locals.databricks_account_id
+  databricks_client_id      = include.env.locals.databricks_client_id
+  databricks_client_secret  = include.env.locals.databricks_client_secret
+  unity_metastore_owner     = include.env.locals.databricks_owner_email
 }

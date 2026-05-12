@@ -2,12 +2,6 @@
 
 locals {
   # Common tags to apply to all resources
-  common_tags = {
-    Project     = "databricks-workspace-iac"
-    ManagedBy   = "terragrunt"
-    Environment = "${path_relative_to_include()}"
-  }
-
   # Parse environment from directory structure
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   region_vars      = read_terragrunt_config(find_in_parent_folders("region.hcl"))
@@ -15,6 +9,15 @@ locals {
   environment      = local.environment_vars.locals.environment
   aws_region       = local.region_vars.locals.aws_region
   component        = basename(get_terragrunt_dir())
+  common_tags = merge(
+    lookup(local.environment_vars.locals, "default_tags", {}),
+    {
+      ManagedBy   = "terragrunt"
+      Environment = local.environment
+      Region      = local.aws_region
+      Component   = local.component
+    }
+  )
 }
 
 # Configure Terragrunt to automatically store tfstate files in an S3 bucket
@@ -97,7 +100,6 @@ terraform {
 
 # Input validation
 inputs = {
-  common_tags = local.common_tags
   environment = local.environment
   aws_region  = local.aws_region
 }

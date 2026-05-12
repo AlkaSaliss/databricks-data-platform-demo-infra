@@ -8,7 +8,7 @@ data "aws_region" "current" {}
 resource "aws_s3_bucket" "terraform_state" {
   bucket = var.bucket_name
 
-  tags = merge(var.common_tags, var.additional_tags, {
+  tags = merge(var.tags, {
     Name = var.bucket_name
   })
 }
@@ -91,7 +91,7 @@ resource "aws_dynamodb_table" "terraform_locks" {
     enabled = false
   }
 
-  tags = merge(var.common_tags, var.additional_tags, {
+  tags = merge(var.tags, {
     Name = var.dynamodb_table_name
   })
 }

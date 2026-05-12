@@ -47,14 +47,8 @@ variable "lifecycle_rules" {
   default = []
 }
 
-variable "common_tags" {
-  description = "Common tags to apply to all resources"
-  type        = map(string)
-  default     = {}
-}
-
-variable "additional_tags" {
-  description = "Additional tags to apply to resources"
+variable "tags" {
+  description = "Additional tags to apply to resources on top of provider default tags"
   type        = map(string)
   default     = {}
 }
