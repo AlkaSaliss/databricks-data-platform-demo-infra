@@ -1,0 +1,36 @@
+# uc-metastore-infra
+
+This stack creates the Unity Catalog metastore resources shared by workspaces.
+
+## Live Stack
+
+- Path: `src/live/dev/eu-west-1/uc-metastore-infra`
+- Terraform module: `src/modules/uc-metastore-infra`
+
+## What It Creates
+
+- Metastore S3 bucket
+- IAM role and policies for Unity Catalog data access
+- Databricks metastore
+
+## Required Environment Variables
+
+- `DATABRICKS_ACCOUNT_ID`
+- `DATABRICKS_CLIENT_ID`
+- `DATABRICKS_CLIENT_SECRET`
+- `DATABRICKS_OWNER_EMAIL`
+
+## Main tfvars Inputs
+
+Configure these in `src/live/dev/eu-west-1/uc-metastore-infra/terraform.tfvars`:
+
+- `prefix`
+- `metastore_name`
+
+## Commands
+
+```bash
+make plan STACK=uc-metastore-infra
+make deploy STACK=uc-metastore-infra
+make destroy STACK=uc-metastore-infra
+```
