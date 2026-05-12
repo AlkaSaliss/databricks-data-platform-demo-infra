@@ -1,4 +1,4 @@
-# Variables for Unity Catalog AWS Infrastructure Module
+# Variables for the Databricks workspace infrastructure module
 
 variable "tags" {
   default     = {}
@@ -16,9 +16,19 @@ variable "region" {
   description = "(Required) AWS region where the assets will be deployed"
 }
 
-variable "cidr_block" {
+variable "vpc_id" {
   type        = string
-  description = "(Required) CIDR block for the VPC that will be used to create the Databricks workspace"
+  description = "(Required) VPC ID for the Databricks workspace network"
+}
+
+variable "subnet_ids" {
+  type        = list(string)
+  description = "(Required) Private subnet IDs for the Databricks workspace network"
+}
+
+variable "security_group_ids" {
+  type        = list(string)
+  description = "(Required) Security group IDs for the Databricks workspace network"
 }
 
 variable "databricks_account_id" {
@@ -32,15 +42,9 @@ variable "workspace_name" {
   description = "(Optional) Workspace Name for this module - if none are provided, the prefix will be used to name the workspace"
 }
 
-variable "unity_metastore_owner" {
-  description = "(Required) Name of the principal that will be the owner of the Metastore"
+variable "metastore_id" {
   type        = string
-}
-
-variable "metastore_name" {
-  description = "(Optional) Name of the metastore that will be created"
-  type        = string
-  default     = null
+  description = "(Required) Unity Catalog metastore ID to assign to the workspace"
 }
 
 variable "databricks_client_id" {
@@ -61,7 +65,13 @@ variable "admin_group_id" {
 }
 
 variable "ws_users" {
-  type = list(string)
+  type        = list(string)
   description = "(Optional) List of users to be granted regular access to the workspace."
+  default     = []
+}
+
+variable "roles_to_assume" {
+  type        = list(string)
+  description = "(Optional) AWS role ARNs that the Databricks cross-account role can pass"
   default     = []
 }

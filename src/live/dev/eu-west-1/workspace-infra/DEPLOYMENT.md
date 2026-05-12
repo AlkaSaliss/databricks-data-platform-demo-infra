@@ -42,7 +42,7 @@ terragrunt apply
 
 1. **Navigate to the component directory**:
    ```bash
-   cd environments/dev/eu-west-1/uc-aws-infra
+   cd live/dev/eu-west-1/workspace-infra
    ```
 
 2. **Edit the `terraform.tfvars` file** with your actual values:

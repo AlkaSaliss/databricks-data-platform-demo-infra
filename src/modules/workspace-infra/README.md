@@ -1,4 +1,4 @@
-# Unity Catalog AWS Infrastructure Module
+# Workspace Infrastructure Module
 
 This Terraform module creates the complete AWS infrastructure required for Databricks Unity Catalog, including:
 
@@ -19,8 +19,8 @@ This Terraform module creates the complete AWS infrastructure required for Datab
 ## Usage
 
 ```hcl
-module "uc_aws_infra" {
-  source = "./modules/uc-aws-infra"
+module "workspace_infra" {
+  source = "./modules/workspace-infra"
 
   # Required variables
   prefix                   = "my-databricks"

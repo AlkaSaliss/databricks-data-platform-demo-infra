@@ -11,8 +11,10 @@ The infrastructure is organized into reusable Terraform modules and environment-
 This project contains the following core Terraform modules:
 
 - **[Account Admin (`account-admin`)](./doc/account-admin.md)**: Manages Databricks account-level resources such as users, groups, and service principals. This is typically the first module to be deployed to set up account-level prerequisites.
-- **[Terraform State Infrastructure (`terraform-state-infra`)]](./doc/terraform-state-infra.md)**: Provisions the S3 bucket and DynamoDB table required for managing Terraform's remote state and state locking. This module should be deployed once per AWS account/region where you intend to manage Terraform state.
-- **[Unity Catalog AWS Infrastructure (`uc-aws-infra`)]](./doc/uc-aws-infra.md)**: Deploys the complete AWS infrastructure needed for a Databricks workspace integrated with Unity Catalog. This includes VPC, S3 buckets for root storage and metastore, IAM roles, and the Databricks workspace and metastore resources themselves.
+- **[Terraform State Infrastructure (`terraform-state-infra`)](./doc/terraform-state-infra.md)**: Provisions the S3 bucket and DynamoDB table required for managing Terraform's remote state and state locking. This module should be deployed once per AWS account/region where you intend to manage Terraform state.
+- **`network-infra`**: Deploys the AWS network baseline needed by the Databricks workspace.
+- **`uc-metastore-infra`**: Deploys the Unity Catalog metastore resources across AWS and Databricks.
+- **`workspace-infra`**: Deploys the Databricks workspace and its related AWS integration resources.
 
 ## Project Structure
 
@@ -23,21 +25,26 @@ This project contains the following core Terraform modules:
 ├── doc/                 # Directory containing detailed documentation for each module
 │   ├── account-admin.md
 │   ├── terraform-state-infra.md
-│   └── uc-aws-infra.md
 └── src/
     ├── environments/    # Terragrunt configurations for different environments (e.g., dev, staging, prod)
     │   └── dev/
     │       └── eu-west-1/ # Region-specific configurations
     │           ├── account-admin/
     │           │   └── terragrunt.hcl
-    │           ├── uc-aws-infra/
+    │           ├── network-infra/
+    │           │   └── terragrunt.hcl
+    │           ├── uc-metastore-infra/
+    │           │   └── terragrunt.hcl
+    │           ├── workspace-infra/
     │           │   └── terragrunt.hcl
     │           ├── env.hcl
     │           └── region.hcl
     ├── modules/         # Reusable Terraform modules
     │   ├── account-admin/
     │   ├── terraform-state-infra/
-    │   └── uc-aws-infra/
+    │   ├── network-infra/
+    │   ├── uc-metastore-infra/
+    │   └── workspace-infra/
     ├── root.hcl         # Root Terragrunt configuration, included by environment configurations
     └── versions.tf      # Terraform provider versions
 ```
@@ -59,7 +66,7 @@ This project contains the following core Terraform modules:
     make init ENV=dev REGION=eu-west-1 COMPONENT=account-admin
 
     # Plan a component (defaults to dev/eu-west-1/account-admin if not specified)
-    make plan COMPONENT=uc-aws-infra
+    make plan COMPONENT=workspace-infra
 
     # Apply all components in dev
     make dev-apply-all REGION=eu-west-1

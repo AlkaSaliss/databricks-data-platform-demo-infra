@@ -1,4 +1,4 @@
-# Provider configuration for Unity Catalog AWS Infrastructure Module
+# Provider configuration for the Databricks workspace infrastructure module
 
 # Databricks provider configuration
 # This provider is aliased as 'mws' for account-level operations

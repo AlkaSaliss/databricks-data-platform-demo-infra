@@ -5,10 +5,16 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+
     databricks = {
       source                = "databricks/databricks"
       version               = ">= 1.29.0"
       configuration_aliases = [databricks.mws]
+    }
+
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9.0"
     }
   }
 }

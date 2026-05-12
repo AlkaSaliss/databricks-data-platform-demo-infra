@@ -14,7 +14,7 @@ locals {
 
   environment      = local.environment_vars.locals.environment
   aws_region       = local.region_vars.locals.aws_region
-  aws_profile_name = "default"
+  component        = basename(get_terragrunt_dir())
 }
 
 # Configure Terragrunt to automatically store tfstate files in an S3 bucket
@@ -45,23 +45,25 @@ remote_state {
 # Generate an AWS provider block
 generate "provider" {
   path      = "provider.tf"
-  if_exists = "skip"
+  if_exists = "overwrite_terragrunt"
   contents  = <<EOF
 provider "aws" {
-  region  = "${local.aws_region}"
-  profile = "${local.aws_profile_name}"
+  region = "${local.aws_region}"
   
   default_tags {
     tags = ${jsonencode(local.common_tags)}
   }
 }
 
+${contains(["terraform-state-infra", "network-infra"], local.component) ? "" : <<EOT
 provider "databricks" {
   alias      = "mws"
   host       = "https://accounts.cloud.databricks.com"
   account_id = var.databricks_account_id
   client_id  = var.databricks_client_id
   client_secret = var.databricks_client_secret
+}
+EOT
 }
 EOF
 }
