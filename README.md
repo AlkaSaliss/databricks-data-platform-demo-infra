@@ -96,6 +96,9 @@ make deploy-all ENV=dev REGION=eu-west-1
 
 # Run the active CI/CD deployment sequence, excluding terraform-state-infra
 make deploy-active-all ENV=dev REGION=eu-west-1
+
+# Destroy the active CI/CD stacks in reverse order, excluding terraform-state-infra
+make destroy-active-all ENV=dev REGION=eu-west-1
 ```
 
 ## GitHub Actions CI/CD
@@ -113,6 +116,7 @@ Both workflows target the active stacks sequentially for `dev/eu-west-1`:
 4. `workspace-infra`
 
 `terraform-state-infra` is intentionally excluded from CI/CD because it bootstraps the remote state bucket and lock table and is deployed once manually.
+Active destroys run in reverse order: `workspace-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
 
 ### GitHub Variables And Secrets
 
@@ -180,6 +184,7 @@ From GitHub, open **Actions** > **Deploy Infrastructure** > **Run workflow**.
 
 Use `action=plan` to run validation and planning only.
 Use `action=apply` to run validation and planning first, then wait for the `dev` Environment approval before applying the active stacks sequentially.
+Use `action=destroy` to run validation and planning first, then wait for the `dev` Environment approval before destroying the active stacks in reverse order.
 
 ## Stack Documentation
 
