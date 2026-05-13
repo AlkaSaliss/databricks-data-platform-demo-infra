@@ -50,11 +50,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform_version="$(awk '$1 == "terraform" { print $2 }' src/.tool-versions)"
-          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' src/.tool-versions)"
+          terraform_version="$(awk '$1 == "terraform" { print $2 }' .tool-versions)"
+          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' .tool-versions)"
 
           if [ -z "$terraform_version" ] || [ -z "$terragrunt_version" ]; then
-            echo "::error::Missing terraform or terragrunt version in src/.tool-versions"
+            echo "::error::Missing terraform or terragrunt version in .tool-versions"
             exit 1
           fi
 

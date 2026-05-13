@@ -1,8 +1,8 @@
 # Environment-specific configuration for development
 locals {
-  environment              = "dev"
-  aws_profile_name         = get_env("AWS_PROFILE_NAME", "default")
-  owner_email              = get_env("DATABRICKS_OWNER_EMAIL", "")
+  environment      = "dev"
+  aws_profile_name = get_env("AWS_PROFILE_NAME", "default")
+  owner_email      = get_env("DATABRICKS_OWNER_EMAIL", "")
   default_tags = {
     Project = "databricks-data-platform-demo-infra"
     Owner   = local.owner_email
