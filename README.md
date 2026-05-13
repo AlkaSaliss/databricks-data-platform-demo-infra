@@ -142,7 +142,7 @@ Optional variables:
 - `CREATE_AUTOMATION_SERVICE_PRINCIPAL`
 - `AUTOMATION_SERVICE_PRINCIPAL_NAME`
 
-JSON variables must be valid JSON values because the workflow writes `terraform.tfvars.json`, for example:
+JSON variables must be valid JSON values because the workflow writes `terraform.tfvars.json`. Compact single-line JSON is recommended for GitHub variables, for example:
 
 ```json
 ["admin@example.com"]
