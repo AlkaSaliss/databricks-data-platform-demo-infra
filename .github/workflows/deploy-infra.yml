@@ -18,7 +18,7 @@ on:
         options:
           - eu-west-1
       action:
-        description: Terragrunt action to run
+        description: Deployment action to run
         required: true
         default: plan
         type: choice
@@ -30,15 +30,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: infra-${{ inputs.environment }}-${{ inputs.region }}
+  group: deploy-infra-${{ inputs.environment }}-${{ inputs.region }}
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: ${{ inputs.action }} active stacks
+  plan:
+    name: Validate and plan active stacks
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      REGION: ${{ inputs.region }}
       AWS_REGION: ${{ inputs.region }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -55,7 +56,6 @@ jobs:
       UNITY_USERS_GROUP: ${{ vars.UNITY_USERS_GROUP }}
       CREATE_AUTOMATION_SERVICE_PRINCIPAL: ${{ vars.CREATE_AUTOMATION_SERVICE_PRINCIPAL }}
       AUTOMATION_SERVICE_PRINCIPAL_NAME: ${{ vars.AUTOMATION_SERVICE_PRINCIPAL_NAME }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,116 +103,109 @@ jobs:
 
       - name: Generate stack tfvars
         shell: bash
-        run: |
-          set -euo pipefail
+        run: scripts/generate-ci-tfvars.sh "$ENVIRONMENT" "$REGION"
 
-          require() {
-            local name="$1"
-            if [ -z "${!name:-}" ]; then
-              echo "::error::$name must be configured as a GitHub Environment variable or secret"
-              exit 1
-            fi
-          }
+      - name: Check formatting
+        shell: bash
+        run: make fmt-check
 
-          require DATABRICKS_ACCOUNT_ID
-          require DATABRICKS_CLIENT_ID
-          require DATABRICKS_CLIENT_SECRET
-          require DATABRICKS_OWNER_EMAIL
-          require DATABRICKS_ACCOUNT_ADMINS_JSON
+      - name: Validate Terragrunt HCL
+        shell: bash
+        run: make hcl-validate-active-all ENV="$ENVIRONMENT" REGION="$REGION"
 
-          command -v jq >/dev/null || {
-            echo "::error::jq is required to generate Terraform JSON tfvars"
-            exit 1
-          }
+      - name: Validate Terraform through Terragrunt
+        shell: bash
+        run: make validate-active-all ENV="$ENVIRONMENT" REGION="$REGION"
 
-          normalize_json() {
-            local name="$1"
-            local value="$2"
-            local normalized
-            local without_extra_brace
-
-            if normalized="$(printf '%s' "$value" | tr -d '\r' | jq -c .)"; then
-              printf '%s' "$normalized"
-              return 0
-            fi
-
-            # Recover from a common GitHub variable copy/paste issue where a
-            # JSON object gets one extra closing brace appended.
-            without_extra_brace="$(printf '%s' "$value" | tr -d '\r')"
-            without_extra_brace="${without_extra_brace%\}}"
-
-            if normalized="$(printf '%s' "$without_extra_brace" | jq -c .)"; then
-              echo "::warning::$name had an extra trailing closing brace; normalized it before writing tfvars" >&2
-              printf '%s' "$normalized"
-              return 0
-            fi
-
-            echo "::error::$name must be valid JSON. Use compact JSON such as [\"user@example.com\"] or {\"user@example.com\":\"User Name\"}." >&2
-            exit 1
-          }
-
-          live_dir="src/live/${{ inputs.environment }}/${{ inputs.region }}"
-          test -d "$live_dir" || {
-            echo "::error::Live directory not found: $live_dir"
-            exit 1
-          }
-
-          databricks_users_json="${DATABRICKS_USERS_JSON:-[]}"
-          workspace_users_json="${WORKSPACE_USERS_JSON:-[]}"
-          user_display_names_json="${USER_DISPLAY_NAMES_JSON:-{}}"
-          unity_admin_group="${UNITY_ADMIN_GROUP:-Unity Catalog Admins}"
-          unity_users_group="${UNITY_USERS_GROUP:-Unity Catalog Users}"
-          create_automation_service_principal="${CREATE_AUTOMATION_SERVICE_PRINCIPAL:-false}"
-          automation_service_principal_name="${AUTOMATION_SERVICE_PRINCIPAL_NAME:-terraform-automation-sp}"
-
-          databricks_account_admins_json="$(normalize_json DATABRICKS_ACCOUNT_ADMINS_JSON "$DATABRICKS_ACCOUNT_ADMINS_JSON")"
-          databricks_users_json="$(normalize_json DATABRICKS_USERS_JSON "$databricks_users_json")"
-          workspace_users_json="$(normalize_json WORKSPACE_USERS_JSON "$workspace_users_json")"
-          user_display_names_json="$(normalize_json USER_DISPLAY_NAMES_JSON "$user_display_names_json")"
-          create_automation_service_principal="$(normalize_json CREATE_AUTOMATION_SERVICE_PRINCIPAL "$create_automation_service_principal")"
-
-          rm -f \
-            "$live_dir/account-admin/terraform.tfvars" \
-            "$live_dir/workspace-infra/terraform.tfvars"
-
-          jq -n \
-            --argjson databricks_account_admins "$databricks_account_admins_json" \
-            --argjson databricks_users "$databricks_users_json" \
-            --argjson user_display_names "$user_display_names_json" \
-            --arg unity_admin_group "$unity_admin_group" \
-            --arg unity_users_group "$unity_users_group" \
-            --argjson create_automation_service_principal "$create_automation_service_principal" \
-            --arg automation_service_principal_name "$automation_service_principal_name" \
-            '{
-              databricks_account_admins: $databricks_account_admins,
-              databricks_users: $databricks_users,
-              user_display_names: $user_display_names,
-              unity_admin_group: $unity_admin_group,
-              unity_users_group: $unity_users_group,
-              create_automation_service_principal: $create_automation_service_principal,
-              automation_service_principal_name: $automation_service_principal_name
-            }' > "$live_dir/account-admin/terraform.tfvars.json"
-
-          jq -n \
-            --argjson ws_users "$workspace_users_json" \
-            '{
-              ws_users: $ws_users
-            }' > "$live_dir/workspace-infra/terraform.tfvars.json"
-
-      - name: Run active stacks sequentially
+      - name: Plan active stacks
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p logs
+          make plan-active-all ENV="$ENVIRONMENT" REGION="$REGION" 2>&1 | tee logs/plan-active-all.log
 
-          case "${{ inputs.action }}" in
-            plan)
-              make plan-active-all ENV="${{ inputs.environment }}" REGION="${{ inputs.region }}"
-              ;;
-            apply)
-              make deploy-active-all ENV="${{ inputs.environment }}" REGION="${{ inputs.region }}"
-              ;;
-            *)
-              echo "::error::Unsupported action: ${{ inputs.action }}"
-              exit 1
-              ;;
-          esac
+      - name: Upload plan logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-infra-plan-logs
+          path: logs/
+          if-no-files-found: ignore
+
+  apply:
+    name: Apply active stacks
+    runs-on: ubuntu-latest
+    needs: plan
+    if: inputs.action == 'apply'
+    environment: ${{ inputs.environment }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      REGION: ${{ inputs.region }}
+      AWS_REGION: ${{ inputs.region }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      DATABRICKS_ACCOUNT_ID: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      DATABRICKS_OWNER_EMAIL: ${{ vars.DATABRICKS_OWNER_EMAIL }}
+      DATABRICKS_ACCOUNT_ADMINS_JSON: ${{ vars.DATABRICKS_ACCOUNT_ADMINS_JSON }}
+      DATABRICKS_USERS_JSON: ${{ vars.DATABRICKS_USERS_JSON }}
+      WORKSPACE_USERS_JSON: ${{ vars.WORKSPACE_USERS_JSON }}
+      USER_DISPLAY_NAMES_JSON: ${{ vars.USER_DISPLAY_NAMES_JSON }}
+      UNITY_ADMIN_GROUP: ${{ vars.UNITY_ADMIN_GROUP }}
+      UNITY_USERS_GROUP: ${{ vars.UNITY_USERS_GROUP }}
+      CREATE_AUTOMATION_SERVICE_PRINCIPAL: ${{ vars.CREATE_AUTOMATION_SERVICE_PRINCIPAL }}
+      AUTOMATION_SERVICE_PRINCIPAL_NAME: ${{ vars.AUTOMATION_SERVICE_PRINCIPAL_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read tool versions
+        id: tool-versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform_version="$(awk '$1 == "terraform" { print $2 }' src/.tool-versions)"
+          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' src/.tool-versions)"
+
+          if [ -z "$terraform_version" ] || [ -z "$terragrunt_version" ]; then
+            echo "::error::Missing terraform or terragrunt version in src/.tool-versions"
+            exit 1
+          fi
+
+          echo "terraform=$terraform_version" >> "$GITHUB_OUTPUT"
+          echo "terragrunt=$terragrunt_version" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ inputs.region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tool-versions.outputs.terraform }}
+
+      - name: Install Terragrunt
+        shell: bash
+        run: |
+          set -euo pipefail
+          terragrunt_version="${{ steps.tool-versions.outputs.terragrunt }}"
+          curl -fsSL \
+            "https://github.com/gruntwork-io/terragrunt/releases/download/v${terragrunt_version}/terragrunt_linux_amd64" \
+            -o terragrunt
+          chmod +x terragrunt
+          sudo mv terragrunt /usr/local/bin/terragrunt
+          terragrunt --version
+
+      - name: Generate stack tfvars
+        shell: bash
+        run: scripts/generate-ci-tfvars.sh "$ENVIRONMENT" "$REGION"
+
+      - name: Apply active stacks sequentially
+        shell: bash
+        run: make deploy-active-all ENV="$ENVIRONMENT" REGION="$REGION"

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy validate hcl-validate fmt clean plan-all plan-active-all deploy-all deploy-active-all apply-all destroy-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy validate hcl-validate fmt fmt-check clean plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -67,6 +67,10 @@ fmt: ## Format Terragrunt and Terraform files
 	@terragrunt hcl format --working-dir=$(SRC_DIR)
 	@find $(SRC_DIR) -name '*.tf' -exec terraform fmt {} \;
 
+fmt-check: ## Check Terraform and Terragrunt formatting without rewriting files
+	@terragrunt hcl format --check --working-dir=$(SRC_DIR)
+	@terraform fmt -check -recursive $(SRC_DIR)
+
 clean: ## Remove Terragrunt and Terraform cache directories
 	@find . -type d \( -name '.terragrunt-cache' -o -name '.terraform' \) -prune -exec rm -rf {} + 2>/dev/null || true
 
@@ -78,6 +82,16 @@ plan-all: ## Run plan for all stacks in deployment order
 plan-active-all: ## Run plan for active stacks in deployment order, excluding terraform-state-infra
 	@for stack in $(ACTIVE_DEPLOY_ORDER); do \
 		$(MAKE) --no-print-directory plan ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
+	done
+
+validate-active-all: ## Run terraform validate for active stacks, excluding terraform-state-infra
+	@for stack in $(ACTIVE_DEPLOY_ORDER); do \
+		$(MAKE) --no-print-directory validate ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
+	done
+
+hcl-validate-active-all: ## Run terragrunt hcl validate for active stacks, excluding terraform-state-infra
+	@for stack in $(ACTIVE_DEPLOY_ORDER); do \
+		$(MAKE) --no-print-directory hcl-validate ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
 	done
 
 deploy-all: ## Run apply for all stacks in deployment order

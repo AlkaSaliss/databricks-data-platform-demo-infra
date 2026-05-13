@@ -100,8 +100,12 @@ make deploy-active-all ENV=dev REGION=eu-west-1
 
 ## GitHub Actions CI/CD
 
-The repository includes a manual GitHub Actions workflow at `.github/workflows/deploy-infra.yml`.
-It deploys the active stacks sequentially for `dev/eu-west-1`:
+The repository uses two GitHub Actions workflows:
+
+- `.github/workflows/pr-infra.yml` runs validation and planning on pull requests.
+- `.github/workflows/deploy-infra.yml` runs manual deployment for an approved commit.
+
+Both workflows target the active stacks sequentially for `dev/eu-west-1`:
 
 1. `account-admin`
 2. `network-infra`
@@ -110,15 +114,17 @@ It deploys the active stacks sequentially for `dev/eu-west-1`:
 
 `terraform-state-infra` is intentionally excluded from CI/CD because it bootstraps the remote state bucket and lock table and is deployed once manually.
 
-### GitHub Environment
+### GitHub Variables And Secrets
 
-Create a GitHub Environment named `dev` and configure required reviewers if you want manual approval before the workflow runs.
-The workflow uses AWS credentials configured in GitHub Environment secrets.
+The PR workflow is not attached to a protected GitHub Environment, so variables and secrets needed for PR planning must be available at repository level.
+The manual apply job uses the `dev` GitHub Environment; configure required reviewers there to approve applies.
+The workflow uses AWS credentials configured in GitHub secrets.
 
-Configure these GitHub Environment secrets:
+Configure these GitHub secrets:
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
+- `DATABRICKS_ACCOUNT_ID`
 - `DATABRICKS_CLIENT_ID`
 - `DATABRICKS_CLIENT_SECRET`
 
@@ -126,9 +132,8 @@ Optional secret:
 
 - `AWS_SESSION_TOKEN`
 
-Configure these GitHub Environment variables:
+Configure these GitHub variables:
 
-- `DATABRICKS_ACCOUNT_ID`
 - `DATABRICKS_OWNER_EMAIL`
 - `DATABRICKS_ACCOUNT_ADMINS_JSON`
 - `DATABRICKS_USERS_JSON`
@@ -156,13 +161,25 @@ JSON variables must be valid JSON values because the workflow writes `terraform.
 
 `TF_STATE_BUCKET` and `TF_STATE_DYNAMODB_TABLE` are not required by the workflow because the state bootstrap stack is excluded.
 Network, metastore, and workspace names are defined directly in the tracked Terragrunt stack definitions under `src/live/dev/eu-west-1`.
+The workflows generate runtime `terraform.tfvars.json` files with `scripts/generate-ci-tfvars.sh`.
 
-### Running The Workflow
+### Pull Request Checks
+
+The PR workflow runs:
+
+- `make fmt-check`
+- `make hcl-validate-active-all ENV=dev REGION=eu-west-1`
+- `make validate-active-all ENV=dev REGION=eu-west-1`
+- `make plan-active-all ENV=dev REGION=eu-west-1`
+
+Plan logs are uploaded as GitHub Actions artifacts.
+
+### Manual Deployment
 
 From GitHub, open **Actions** > **Deploy Infrastructure** > **Run workflow**.
 
-Use `action=plan` to review the active stacks in deployment order.
-Use `action=apply` to apply the same active stacks sequentially with non-interactive Terragrunt applies.
+Use `action=plan` to run validation and planning only.
+Use `action=apply` to run validation and planning first, then wait for the `dev` Environment approval before applying the active stacks sequentially.
 
 ## Stack Documentation
 

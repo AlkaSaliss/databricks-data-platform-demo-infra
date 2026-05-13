@@ -1,0 +1,118 @@
+name: PR Infrastructure Checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "Makefile"
+      - "scripts/**"
+      - "src/**"
+      - "doc/**"
+      - "README.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-infra-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  ENVIRONMENT: dev
+  REGION: eu-west-1
+  AWS_REGION: eu-west-1
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+  DATABRICKS_ACCOUNT_ID: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+  DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+  DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+  DATABRICKS_OWNER_EMAIL: ${{ vars.DATABRICKS_OWNER_EMAIL }}
+  DATABRICKS_ACCOUNT_ADMINS_JSON: ${{ vars.DATABRICKS_ACCOUNT_ADMINS_JSON }}
+  DATABRICKS_USERS_JSON: ${{ vars.DATABRICKS_USERS_JSON }}
+  WORKSPACE_USERS_JSON: ${{ vars.WORKSPACE_USERS_JSON }}
+  USER_DISPLAY_NAMES_JSON: ${{ vars.USER_DISPLAY_NAMES_JSON }}
+  UNITY_ADMIN_GROUP: ${{ vars.UNITY_ADMIN_GROUP }}
+  UNITY_USERS_GROUP: ${{ vars.UNITY_USERS_GROUP }}
+  CREATE_AUTOMATION_SERVICE_PRINCIPAL: ${{ vars.CREATE_AUTOMATION_SERVICE_PRINCIPAL }}
+  AUTOMATION_SERVICE_PRINCIPAL_NAME: ${{ vars.AUTOMATION_SERVICE_PRINCIPAL_NAME }}
+
+jobs:
+  validate-and-plan:
+    name: Validate and plan active stacks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read tool versions
+        id: tool-versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform_version="$(awk '$1 == "terraform" { print $2 }' src/.tool-versions)"
+          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' src/.tool-versions)"
+
+          if [ -z "$terraform_version" ] || [ -z "$terragrunt_version" ]; then
+            echo "::error::Missing terraform or terragrunt version in src/.tool-versions"
+            exit 1
+          fi
+
+          echo "terraform=$terraform_version" >> "$GITHUB_OUTPUT"
+          echo "terragrunt=$terragrunt_version" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tool-versions.outputs.terraform }}
+
+      - name: Install Terragrunt
+        shell: bash
+        run: |
+          set -euo pipefail
+          terragrunt_version="${{ steps.tool-versions.outputs.terragrunt }}"
+          curl -fsSL \
+            "https://github.com/gruntwork-io/terragrunt/releases/download/v${terragrunt_version}/terragrunt_linux_amd64" \
+            -o terragrunt
+          chmod +x terragrunt
+          sudo mv terragrunt /usr/local/bin/terragrunt
+          terragrunt --version
+
+      - name: Generate stack tfvars
+        shell: bash
+        run: scripts/generate-ci-tfvars.sh "$ENVIRONMENT" "$REGION"
+
+      - name: Check formatting
+        shell: bash
+        run: make fmt-check
+
+      - name: Validate Terragrunt HCL
+        shell: bash
+        run: make hcl-validate-active-all ENV="$ENVIRONMENT" REGION="$REGION"
+
+      - name: Validate Terraform through Terragrunt
+        shell: bash
+        run: make validate-active-all ENV="$ENVIRONMENT" REGION="$REGION"
+
+      - name: Plan active stacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p logs
+          make plan-active-all ENV="$ENVIRONMENT" REGION="$REGION" 2>&1 | tee logs/plan-active-all.log
+
+      - name: Upload plan logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-infra-plan-logs
+          path: logs/
+          if-no-files-found: ignore
