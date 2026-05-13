@@ -28,7 +28,7 @@ dependency "account_admin" {
 
   mock_outputs = {
     admin_group = {
-      id = "mock-admin-group-id"
+      id = 123456789
     }
   }
 
