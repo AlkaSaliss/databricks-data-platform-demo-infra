@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy validate hcl-validate fmt fmt-check clean plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -13,6 +13,7 @@ STACK_DIR := $(LIVE_DIR)/$(STACK)
 DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra
 ACTIVE_DEPLOY_ORDER := account-admin network-infra uc-metastore-infra workspace-infra
 DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
+ACTIVE_DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; printf "\nAvailable targets:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2} END {printf "\n"}' $(MAKEFILE_LIST)
@@ -56,6 +57,9 @@ apply: deploy ## Alias for deploy
 
 destroy: ensure-stack-dir ## Run terragrunt destroy for one stack
 	@cd $(STACK_DIR) && terragrunt destroy
+
+destroy-ci: ensure-stack-dir ## Run non-interactive terragrunt destroy for one stack in CI
+	@cd $(STACK_DIR) && terragrunt destroy -auto-approve
 
 validate: ensure-stack-dir ## Run terragrunt validate for one stack
 	@cd $(STACK_DIR) && terragrunt validate
@@ -109,4 +113,9 @@ apply-all: deploy-all ## Alias for deploy-all
 destroy-all: ## Run destroy for all stacks in reverse order
 	@for stack in $(DESTROY_ORDER); do \
 		$(MAKE) --no-print-directory destroy ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
+	done
+
+destroy-active-all: ## Run non-interactive destroy for active stacks in reverse order, excluding terraform-state-infra
+	@for stack in $(ACTIVE_DESTROY_ORDER); do \
+		$(MAKE) --no-print-directory destroy-ci ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
 	done
