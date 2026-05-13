@@ -120,6 +120,20 @@ jobs:
           require DATABRICKS_OWNER_EMAIL
           require DATABRICKS_ACCOUNT_ADMINS_JSON
 
+          command -v jq >/dev/null || {
+            echo "::error::jq is required to generate Terraform JSON tfvars"
+            exit 1
+          }
+
+          validate_json() {
+            local name="$1"
+            local value="$2"
+            if ! printf '%s' "$value" | jq -e . >/dev/null; then
+              echo "::error::$name must be valid JSON"
+              exit 1
+            fi
+          }
+
           live_dir="src/live/${{ inputs.environment }}/${{ inputs.region }}"
           test -d "$live_dir" || {
             echo "::error::Live directory not found: $live_dir"
@@ -134,19 +148,39 @@ jobs:
           create_automation_service_principal="${CREATE_AUTOMATION_SERVICE_PRINCIPAL:-false}"
           automation_service_principal_name="${AUTOMATION_SERVICE_PRINCIPAL_NAME:-terraform-automation-sp}"
 
-          cat > "$live_dir/account-admin/terraform.tfvars" <<EOF
-          databricks_account_admins = ${DATABRICKS_ACCOUNT_ADMINS_JSON}
-          databricks_users = ${databricks_users_json}
-          user_display_names = ${user_display_names_json}
-          unity_admin_group = "${unity_admin_group}"
-          unity_users_group = "${unity_users_group}"
-          create_automation_service_principal = ${create_automation_service_principal}
-          automation_service_principal_name = "${automation_service_principal_name}"
-          EOF
+          validate_json DATABRICKS_ACCOUNT_ADMINS_JSON "$DATABRICKS_ACCOUNT_ADMINS_JSON"
+          validate_json DATABRICKS_USERS_JSON "$databricks_users_json"
+          validate_json WORKSPACE_USERS_JSON "$workspace_users_json"
+          validate_json USER_DISPLAY_NAMES_JSON "$user_display_names_json"
+          validate_json CREATE_AUTOMATION_SERVICE_PRINCIPAL "$create_automation_service_principal"
 
-          cat > "$live_dir/workspace-infra/terraform.tfvars" <<EOF
-          ws_users = ${workspace_users_json}
-          EOF
+          rm -f \
+            "$live_dir/account-admin/terraform.tfvars" \
+            "$live_dir/workspace-infra/terraform.tfvars"
+
+          jq -n \
+            --argjson databricks_account_admins "$DATABRICKS_ACCOUNT_ADMINS_JSON" \
+            --argjson databricks_users "$databricks_users_json" \
+            --argjson user_display_names "$user_display_names_json" \
+            --arg unity_admin_group "$unity_admin_group" \
+            --arg unity_users_group "$unity_users_group" \
+            --argjson create_automation_service_principal "$create_automation_service_principal" \
+            --arg automation_service_principal_name "$automation_service_principal_name" \
+            '{
+              databricks_account_admins: $databricks_account_admins,
+              databricks_users: $databricks_users,
+              user_display_names: $user_display_names,
+              unity_admin_group: $unity_admin_group,
+              unity_users_group: $unity_users_group,
+              create_automation_service_principal: $create_automation_service_principal,
+              automation_service_principal_name: $automation_service_principal_name
+            }' > "$live_dir/account-admin/terraform.tfvars.json"
+
+          jq -n \
+            --argjson ws_users "$workspace_users_json" \
+            '{
+              ws_users: $ws_users
+            }' > "$live_dir/workspace-infra/terraform.tfvars.json"
 
       - name: Run active stacks sequentially
         shell: bash
