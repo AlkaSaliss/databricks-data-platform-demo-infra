@@ -7,7 +7,8 @@ include "root" {
 }
 
 include "env" {
-  path = find_in_parent_folders("env.hcl")
+  path   = find_in_parent_folders("env.hcl")
+  expose = true
 }
 
 include "region" {
@@ -16,6 +17,6 @@ include "region" {
 }
 
 inputs = {
-  prefix     = "network-${include.env.locals.env}-${include.region.locals.aws_region}"
+  prefix     = "network-${include.env.locals.environment}-${include.region.locals.aws_region}"
   cidr_block = "10.1.0.0/16"
 }
