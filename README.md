@@ -116,8 +116,8 @@ Both workflows target the active stacks sequentially for `dev/eu-west-1`:
 
 ### GitHub Variables And Secrets
 
-The PR workflow is not attached to a protected GitHub Environment, so variables and secrets needed for PR planning must be available at repository level.
-The manual apply job uses the `dev` GitHub Environment; configure required reviewers there to approve applies.
+Both workflows read configuration from the `dev` GitHub Environment.
+Configure required reviewers on that environment if PR planning and manual applies should wait for approval.
 The workflow uses AWS credentials configured in GitHub secrets.
 
 Configure these GitHub secrets:
