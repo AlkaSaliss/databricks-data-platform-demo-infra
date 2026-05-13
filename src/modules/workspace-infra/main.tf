@@ -128,7 +128,7 @@ resource "time_sleep" "wait_for_identity_federation" {
 }
 
 resource "databricks_mws_permission_assignment" "add_ws_admin_group" {
-  depends_on  = [time_sleep.wait_for_identity_federation]
+  depends_on   = [time_sleep.wait_for_identity_federation]
   provider     = databricks.mws
   workspace_id = databricks_mws_workspaces.this.workspace_id
   principal_id = var.admin_group_id
@@ -142,7 +142,7 @@ data "databricks_user" "ws_user_data" {
 }
 
 resource "databricks_mws_permission_assignment" "assign_ws_users" {
-  depends_on  = [time_sleep.wait_for_identity_federation]
+  depends_on   = [time_sleep.wait_for_identity_federation]
   for_each     = data.databricks_user.ws_user_data
   provider     = databricks.mws
   workspace_id = databricks_mws_workspaces.this.workspace_id

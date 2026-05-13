@@ -6,9 +6,9 @@ locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   region_vars      = read_terragrunt_config(find_in_parent_folders("region.hcl"))
 
-  environment      = local.environment_vars.locals.environment
-  aws_region       = local.region_vars.locals.aws_region
-  component        = basename(get_terragrunt_dir())
+  environment = local.environment_vars.locals.environment
+  aws_region  = local.region_vars.locals.aws_region
+  component   = basename(get_terragrunt_dir())
   common_tags = merge(
     lookup(local.environment_vars.locals, "default_tags", {}),
     {
@@ -49,7 +49,7 @@ remote_state {
 generate "provider" {
   path      = "provider.tf"
   if_exists = "overwrite_terragrunt"
-  contents  = <<EOF
+  contents = <<EOF
 provider "aws" {
   region = "${local.aws_region}"
   

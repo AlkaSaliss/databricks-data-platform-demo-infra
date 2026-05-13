@@ -56,7 +56,7 @@ dependency "metastore" {
   config_path = "../uc-metastore-infra"
 
   mock_outputs = {
-    metastore_id                = "mock-metastore-id"
+    metastore_id               = "mock-metastore-id"
     unity_catalog_iam_role_arn = "arn:aws:iam::123456789012:role/mock-metastore-role"
   }
 
@@ -65,18 +65,18 @@ dependency "metastore" {
 
 # Pass region, dependency outputs, and workspace-specific wiring to Terraform
 inputs = {
-  region                    = include.region.locals.aws_region
-  prefix                    = "ws-${include.env.locals.environment}-${include.region.locals.aws_region}"
-  workspace_name            = "lab"
-  databricks_account_id     = include.env.locals.databricks_account_id
-  databricks_client_id      = include.env.locals.databricks_client_id
-  databricks_client_secret  = include.env.locals.databricks_client_secret
-  admin_group_id            = dependency.account_admin.outputs.admin_group.id
-  vpc_id                    = dependency.network.outputs.vpc_id
-  subnet_ids                = dependency.network.outputs.subnets
-  security_group_ids        = dependency.network.outputs.security_group_ids
-  metastore_id              = dependency.metastore.outputs.metastore_id
-  roles_to_assume           = [dependency.metastore.outputs.unity_catalog_iam_role_arn]
+  region                   = include.region.locals.aws_region
+  prefix                   = "ws-${include.env.locals.environment}-${include.region.locals.aws_region}"
+  workspace_name           = "lab"
+  databricks_account_id    = include.env.locals.databricks_account_id
+  databricks_client_id     = include.env.locals.databricks_client_id
+  databricks_client_secret = include.env.locals.databricks_client_secret
+  admin_group_id           = dependency.account_admin.outputs.admin_group.id
+  vpc_id                   = dependency.network.outputs.vpc_id
+  subnet_ids               = dependency.network.outputs.subnets
+  security_group_ids       = dependency.network.outputs.security_group_ids
+  metastore_id             = dependency.metastore.outputs.metastore_id
+  roles_to_assume          = [dependency.metastore.outputs.unity_catalog_iam_role_arn]
 }
 
 # Other variables are defined in terraform.tfvars file

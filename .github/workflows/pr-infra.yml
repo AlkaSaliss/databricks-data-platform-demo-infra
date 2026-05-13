@@ -41,6 +41,7 @@ jobs:
   validate-and-plan:
     name: Validate and plan active stacks
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,16 +51,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform_version="$(awk '$1 == "terraform" { print $2 }' src/.tool-versions)"
-          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' src/.tool-versions)"
+          terraform_version="$(awk '$1 == "terraform" { print $2 }' .tool-versions)"
+          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' .tool-versions)"
 
           if [ -z "$terraform_version" ] || [ -z "$terragrunt_version" ]; then
-            echo "::error::Missing terraform or terragrunt version in src/.tool-versions"
+            echo "::error::Missing terraform or terragrunt version in .tool-versions"
             exit 1
           fi
 
           echo "terraform=$terraform_version" >> "$GITHUB_OUTPUT"
           echo "terragrunt=$terragrunt_version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify GitHub configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            AWS_ACCESS_KEY_ID \
+            AWS_SECRET_ACCESS_KEY \
+            DATABRICKS_ACCOUNT_ID \
+            DATABRICKS_CLIENT_ID \
+            DATABRICKS_CLIENT_SECRET \
+            DATABRICKS_OWNER_EMAIL \
+            DATABRICKS_ACCOUNT_ADMINS_JSON; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is not available. Configure it in the dev GitHub Environment or repository settings."
+              exit 1
+            fi
+          done
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
