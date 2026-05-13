@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks show-config plan deploy apply destroy validate hcl-validate fmt clean plan-all deploy-all apply-all destroy-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy validate hcl-validate fmt clean plan-all plan-active-all deploy-all deploy-active-all apply-all destroy-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -11,6 +11,7 @@ LIVE_DIR := $(SRC_DIR)/live/$(ENV)/$(REGION)
 STACK_DIR := $(LIVE_DIR)/$(STACK)
 
 DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra
+ACTIVE_DEPLOY_ORDER := account-admin network-infra uc-metastore-infra workspace-infra
 DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
 
 help: ## Show available commands
@@ -30,6 +31,9 @@ env-vars: ## Show environment variables used by the stacks
 list-stacks: ## List available stacks in the selected environment and region
 	@printf '%s\n' $(DEPLOY_ORDER)
 
+list-active-stacks: ## List CI/CD stacks, excluding one-time terraform-state-infra bootstrap
+	@printf '%s\n' $(ACTIVE_DEPLOY_ORDER)
+
 show-config: ## Show the resolved stack path
 	@echo "ENV=$(ENV)"
 	@echo "REGION=$(REGION)"
@@ -44,6 +48,9 @@ plan: ensure-stack-dir ## Run terragrunt plan for one stack
 
 deploy: ensure-stack-dir ## Run terragrunt apply for one stack
 	@cd $(STACK_DIR) && terragrunt apply
+
+deploy-ci: ensure-stack-dir ## Run non-interactive terragrunt apply for one stack in CI
+	@cd $(STACK_DIR) && terragrunt apply -auto-approve
 
 apply: deploy ## Alias for deploy
 
@@ -68,9 +75,19 @@ plan-all: ## Run plan for all stacks in deployment order
 		$(MAKE) --no-print-directory plan ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
 	done
 
+plan-active-all: ## Run plan for active stacks in deployment order, excluding terraform-state-infra
+	@for stack in $(ACTIVE_DEPLOY_ORDER); do \
+		$(MAKE) --no-print-directory plan ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
+	done
+
 deploy-all: ## Run apply for all stacks in deployment order
 	@for stack in $(DEPLOY_ORDER); do \
 		$(MAKE) --no-print-directory deploy ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
+	done
+
+deploy-active-all: ## Run non-interactive apply for active stacks in deployment order, excluding terraform-state-infra
+	@for stack in $(ACTIVE_DEPLOY_ORDER); do \
+		$(MAKE) --no-print-directory deploy-ci ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
 	done
 
 apply-all: deploy-all ## Alias for deploy-all

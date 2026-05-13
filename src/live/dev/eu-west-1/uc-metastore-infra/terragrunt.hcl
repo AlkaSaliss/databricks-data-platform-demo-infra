@@ -18,6 +18,8 @@ include "region" {
 
 inputs = {
   region                    = include.region.locals.aws_region
+  prefix                    = "uc-${include.env.locals.env}-${include.region.locals.aws_region}"
+  metastore_name            = "metastore"
   databricks_account_id     = include.env.locals.databricks_account_id
   databricks_client_id      = include.env.locals.databricks_client_id
   databricks_client_secret  = include.env.locals.databricks_client_secret

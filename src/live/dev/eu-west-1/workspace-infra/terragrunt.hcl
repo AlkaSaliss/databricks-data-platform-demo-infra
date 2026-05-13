@@ -66,6 +66,8 @@ dependency "metastore" {
 # Pass region, dependency outputs, and workspace-specific wiring to Terraform
 inputs = {
   region                    = include.region.locals.aws_region
+  prefix                    = "ws-${include.env.locals.env}-${include.region.locals.aws_region}"
+  workspace_name            = "lab"
   databricks_account_id     = include.env.locals.databricks_account_id
   databricks_client_id      = include.env.locals.databricks_client_id
   databricks_client_secret  = include.env.locals.databricks_client_secret

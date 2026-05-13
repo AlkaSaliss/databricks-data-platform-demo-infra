@@ -83,7 +83,6 @@ resource "time_sleep" "wait_for_iam_propagation" {
 
 resource "databricks_mws_credentials" "this" {
   provider         = databricks.mws
-  account_id       = var.databricks_account_id
   role_arn         = aws_iam_role.cross_account_role.arn
   credentials_name = "${var.prefix}-creds"
   depends_on       = [time_sleep.wait_for_iam_propagation]
@@ -123,7 +122,13 @@ resource "databricks_metastore_assignment" "default_metastore" {
   default_catalog_name = "hive_metastore"
 }
 
+resource "time_sleep" "wait_for_identity_federation" {
+  depends_on      = [databricks_metastore_assignment.default_metastore]
+  create_duration = "30s"
+}
+
 resource "databricks_mws_permission_assignment" "add_ws_admin_group" {
+  depends_on  = [time_sleep.wait_for_identity_federation]
   provider     = databricks.mws
   workspace_id = databricks_mws_workspaces.this.workspace_id
   principal_id = var.admin_group_id
@@ -137,6 +142,7 @@ data "databricks_user" "ws_user_data" {
 }
 
 resource "databricks_mws_permission_assignment" "assign_ws_users" {
+  depends_on  = [time_sleep.wait_for_identity_federation]
   for_each     = data.databricks_user.ws_user_data
   provider     = databricks.mws
   workspace_id = databricks_mws_workspaces.this.workspace_id
