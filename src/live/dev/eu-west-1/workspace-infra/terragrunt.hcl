@@ -32,7 +32,7 @@ dependency "account_admin" {
     }
   }
 
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "output"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
 }
 
 dependency "network" {
@@ -49,7 +49,7 @@ dependency "network" {
     ]
   }
 
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "output"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
 }
 
 dependency "metastore" {
@@ -60,7 +60,7 @@ dependency "metastore" {
     unity_catalog_iam_role_arn = "arn:aws:iam::123456789012:role/mock-metastore-role"
   }
 
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "output"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
 }
 
 # Pass region, dependency outputs, and workspace-specific wiring to Terraform
