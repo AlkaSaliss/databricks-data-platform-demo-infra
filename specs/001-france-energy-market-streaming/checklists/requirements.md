@@ -36,4 +36,7 @@
 - Clarification decisions for Kafka provider, producer location, AWS S3 reuse/fallback,
   Databricks ingestion, Unity Catalog naming, Flink runtime, France source, file
   format, partitioning, and secrets were applied on 2026-05-14.
+- Curated event storage was updated to require a dedicated AWS S3 bucket created for
+  normalized, analytics, and observability outputs as isolated demo storage without
+  changing existing Terraform modules.
 - Items marked complete after validation on 2026-05-14.

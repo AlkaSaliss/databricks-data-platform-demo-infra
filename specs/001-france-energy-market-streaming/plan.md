@@ -9,8 +9,9 @@ Build a France-first Energy Market Command Center MVP that demonstrates an
 end-to-end streaming data platform using public RTE / ODRÉ éCO2mix data. A local
 Python producer publishes raw France events to Confluent Cloud Kafka. Flink jobs
 normalize, validate, deduplicate, aggregate, and emit observability records with
-event-time semantics. Curated outputs land in AWS S3 and are loaded into Databricks
-Bronze, Silver, Gold, and observability schemas under Unity Catalog-compatible names.
+event-time semantics. Curated event outputs land in a dedicated AWS S3 bucket created
+for the demo and are loaded into Databricks Bronze, Silver, Gold, and observability
+schemas under Unity Catalog-compatible names.
 
 The MVP is additive and isolated: application code goes under
 `apps/energy-market-command-center`, Databricks assets under
@@ -23,8 +24,9 @@ under `src/modules` and active stacks under `src/live` are not modified for the 
 **Language/Version**: Python 3.12  
 **Primary Dependencies**: uv, confluent-kafka, Apache Flink/PyFlink or Flink SQL,
 boto3 or equivalent AWS SDK, Databricks SQL/notebooks, pytest, ruff  
-**Storage**: Confluent Cloud Kafka for streaming; AWS S3 for landing; Databricks
-managed Delta tables for Bronze/Silver/Gold analytics  
+**Storage**: Confluent Cloud Kafka for streaming; AWS S3 for raw/debug landing when
+needed; dedicated AWS S3 curated-events bucket for normalized, analytics, and
+observability outputs; Databricks managed Delta tables for Bronze/Silver/Gold analytics
 **Testing**: pytest for unit, contract, and integration tests; ruff for linting;
 manual quickstart validation for cloud-backed demo flow  
 **Target Platform**: Local developer machine for producer and MVP Flink process;
@@ -64,9 +66,9 @@ volume suitable for an interview demo
   business and technical narrative.
 - **MVP Simplicity**: PASS. Local process execution for producer and Flink is allowed
   while using cloud Kafka and S3. Managed Flink is deferred.
-- **IaC Alignment**: PASS. No Terraform change is strictly required for MVP if an
-  existing S3 bucket/external location is usable. If not, an additive demo storage
-  module is a future task.
+- **IaC Alignment**: PASS. A dedicated curated-events bucket is required for the demo
+  and must be additive and isolated from existing modules. Existing Terraform modules
+  are not modified.
 
 ## Project Structure
 
@@ -155,8 +157,10 @@ CONFLUENT_SECURITY_PROTOCOL
 CONFLUENT_SASL_MECHANISM
 AWS_PROFILE
 AWS_REGION
-ENERGY_DEMO_S3_BUCKET
-ENERGY_DEMO_S3_PREFIX
+ENERGY_DEMO_RAW_S3_BUCKET
+ENERGY_DEMO_RAW_S3_PREFIX
+ENERGY_DEMO_CURATED_S3_BUCKET
+ENERGY_DEMO_CURATED_S3_PREFIX
 DATABRICKS_HOST
 DATABRICKS_AUTH_TYPE
 DATABRICKS_TOKEN or DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET
@@ -291,10 +295,16 @@ Amazon Managed Service for Apache Flink is a later hardening phase.
 Use real AWS S3. Required partition fields are `country_code`, `dataset`, and
 `event_date`.
 
-Base convention:
+Raw/debug output convention:
 
 ```text
-s3://<bucket>/<prefix>/country_code=FR/dataset=<dataset>/event_date=YYYY-MM-DD/
+s3://<ENERGY_DEMO_RAW_S3_BUCKET>/<ENERGY_DEMO_RAW_S3_PREFIX>/country_code=FR/dataset=raw_fr_energy_grid/event_date=YYYY-MM-DD/
+```
+
+Dedicated curated-events bucket convention:
+
+```text
+s3://<ENERGY_DEMO_CURATED_S3_BUCKET>/<ENERGY_DEMO_CURATED_S3_PREFIX>/country_code=FR/dataset=<dataset>/event_date=YYYY-MM-DD/
 ```
 
 Datasets:
@@ -312,6 +322,9 @@ Formats:
 
 - Raw/debug: JSONL acceptable.
 - Normalized/analytics/observability: Parquet preferred.
+- Curated normalized, analytics, and observability outputs must use the dedicated
+  curated-events bucket.
+- Raw/debug outputs may use an existing bucket or separate raw prefix when available.
 
 ## 9. Databricks Catalog/Schema/Table Design
 
@@ -347,9 +360,10 @@ metadata, and lineage to the S3 dataset.
 
 ## 10. Bronze Ingestion Strategy
 
-Prefer Databricks Auto Loader if an external location is already configured for the S3
-landing prefix. If not, use a batch read from S3 for MVP simplicity. Bronze preserves
-raw France payloads, metadata, file path, and load timestamp.
+Prefer Databricks Auto Loader if an external location is already configured for the
+dedicated curated-events bucket or raw/debug landing prefix. If not, use a batch read
+from S3 for MVP simplicity. Bronze preserves raw France payloads, metadata, file path,
+and load timestamp.
 
 ## 11. Silver Transformation Strategy
 
@@ -442,9 +456,11 @@ Optional future workflow:
 
 ## 17. Terraform/Terragrunt Impact
 
-No Terraform/Terragrunt changes are strictly needed for the MVP if an existing S3
-bucket or Unity Catalog external location can be reused from current infrastructure
-outputs. Current relevant outputs include:
+Terraform/Terragrunt changes are not required to modify existing infrastructure, but a
+dedicated curated-events bucket is required for the demo. If it is managed by this
+repo, it must be implemented as an additive demo module or isolated Terragrunt stack
+and not by changing existing modules. Current relevant outputs for Databricks/UC
+integration include:
 
 - `workspace-infra.root_bucket`
 - `workspace-infra.databricks_host`
@@ -452,9 +468,8 @@ outputs. Current relevant outputs include:
 - `uc-metastore-infra.metastore_id`
 - `uc-metastore-infra.unity_catalog_iam_role_arn`
 
-If no reusable bucket/external location is available, define an optional future
-hardening task for an additive demo storage module or isolated Terragrunt stack. Do
-not modify existing modules for MVP.
+Do not modify existing modules for MVP. The curated-events bucket creation is an
+additive demo storage task.
 
 ## 18. MVP Delivery Phases
 
@@ -465,7 +480,8 @@ not modify existing modules for MVP.
 3. **Flink processing**
    - Normalize, validate, deduplicate, aggregate, and emit observability outputs.
 4. **S3 landing**
-   - Write raw/debug and curated datasets using partition convention.
+   - Write curated datasets to the dedicated curated-events bucket using the partition
+     convention. Raw/debug datasets may use a separate raw landing prefix.
 5. **Databricks lakehouse**
    - Bronze, Silver, Gold, and observability assets load from S3.
 6. **Demo readiness**
@@ -490,7 +506,8 @@ only after France is complete and tested.
 |------|------------|
 | France source unavailable during demo | Use checked-in non-sensitive sample payloads for replay |
 | Confluent Cloud credentials misconfigured | Add config validation that names missing env vars without printing values |
-| No reusable S3 external location | Use batch read with existing bucket if possible; otherwise defer additive storage IaC |
+| Curated-events bucket missing | Add an isolated demo storage task; do not modify existing modules |
+| No Databricks external location for curated bucket | Use batch read if permitted, or add external-location setup as an additive task |
 | Flink local runtime complexity | Keep MVP jobs narrow and allow Flink SQL or PyFlink based on simplest verified path |
 | Late/out-of-order records unclear in demo | Include deliberate late sample events and observability query |
 | Existing infra regression | Do not modify `src/modules` or active `src/live`; keep CI infra workflows unchanged |

@@ -11,7 +11,8 @@
 
 - Q: Which Kafka provider is in scope for the MVP? → A: Use Confluent Cloud only; local Kafka is excluded.
 - Q: Where do producers run and how do they authenticate? → A: Producers run locally from the developer machine and authenticate to Confluent Cloud using environment variables.
-- Q: Which object storage is in scope? → A: Use real AWS S3; reuse an existing bucket if infrastructure outputs expose one, otherwise specify an additive demo bucket/module as a future task.
+- Q: Which object storage is in scope? → A: Use real AWS S3; curated event outputs require a dedicated demo bucket, while raw/debug outputs may use an existing bucket or prefix.
+- Q: How should curated events be stored in S3? → A: Create a dedicated AWS S3 bucket for curated event outputs; implement it as an additive demo resource and do not modify existing Terraform modules.
 - Q: How should Databricks ingest curated S3 outputs? → A: Use Databricks Auto Loader or batch reads from S3 depending on MVP complexity, preferring Auto Loader when an external location is already available.
 - Q: What Unity Catalog namespace convention should be used? → A: Use catalog `energy_market_demo` with schemas `bronze`, `silver`, `gold`, and `observability`, compatible with the existing UC metastore.
 - Q: What Flink runtime is acceptable for MVP? → A: Flink may run locally or as an application process for the MVP, but it must connect to Confluent Cloud and AWS S3; Amazon Managed Service for Apache Flink is a later hardening phase.
@@ -107,8 +108,8 @@ verify that each major talking point has a corresponding artifact or query outpu
 - Duplicate records are replayed: deduplication must produce deterministic outcomes.
 - Cloud credentials are missing locally: setup validation must fail with a clear
   missing-configuration message and must not expose secret values.
-- No reusable S3 bucket or external location is available from existing infrastructure:
-  planning must define an additive demo storage task rather than modifying existing
+- No curated-events S3 bucket exists yet: planning must define an additive demo
+  storage task for a dedicated curated-events bucket rather than modifying existing
   infrastructure modules.
 - Curated files are present in storage but no new records arrived: lakehouse queries
   must still return the latest available state and freshness must indicate staleness.
@@ -129,8 +130,9 @@ verify that each major talking point has a corresponding artifact or query outpu
 - **FR-009**: Invalid records MUST be exposed as first-class observability output with rule identifiers and human-readable reasons.
 - **FR-010**: Late records MUST be exposed as first-class observability output with event time, detection time, and lateness information.
 - **FR-011**: The feature MUST produce basic France KPI aggregates suitable for analytics, including demand, generation, renewable generation, renewable share, and record counts by time window.
-- **FR-012**: Curated outputs MUST be written to real AWS S3 with partitions by `country_code`, `dataset`, and `event_date`.
-- **FR-012a**: The feature MUST prefer reusing an existing S3 bucket or external location exposed by current infrastructure outputs; if unavailable, planning MUST define an additive demo bucket/module as a future task.
+- **FR-012**: Raw and curated outputs MUST be written to real AWS S3 with partitions by `country_code`, `dataset`, and `event_date`.
+- **FR-012a**: Curated normalized, analytics, and observability event outputs MUST land in a dedicated AWS S3 bucket created for the demo. The bucket MUST be defined as an additive demo resource and MUST NOT require changes to existing Terraform/Terragrunt modules.
+- **FR-012c**: Raw/debug outputs MAY reuse an existing S3 bucket or external location exposed by current infrastructure outputs when available.
 - **FR-012b**: Analytics outputs SHOULD use Parquet; raw and debug outputs MAY use JSONL.
 - **FR-013**: Databricks ingestion MUST create or load Bronze, Silver, Gold, and observability tables for France using Unity Catalog-compatible names under catalog `energy_market_demo`.
 - **FR-013a**: Databricks ingestion SHOULD use Auto Loader when an external location is already available; otherwise, batch reads from S3 are acceptable for MVP simplicity.
@@ -181,8 +183,10 @@ verify that each major talking point has a corresponding artifact or query outpu
 - **Flink Runtime**: Flink may run locally or as an application process for the MVP,
   but must use Confluent Cloud and AWS S3. Managed Flink on AWS is a future hardening
   phase.
-- **Storage**: Use real AWS S3. Prefer existing infrastructure outputs for bucket or
-  external-location reuse; otherwise defer an additive demo bucket/module to planning.
+- **Storage**: Use real AWS S3. Curated normalized, analytics, and observability event
+  outputs require a dedicated demo curated-events bucket created for that purpose.
+  Raw/debug outputs may reuse an existing infrastructure bucket or external location
+  when available.
 - **Secrets**: Required environment variables include Confluent bootstrap server,
   Confluent API key, Confluent API secret, AWS profile or credential selectors, S3
   bucket or prefix settings, Databricks host, and Databricks authentication selector.
@@ -234,6 +238,7 @@ verify that each major talking point has a corresponding artifact or query outpu
 - Dashboard creation means analytics-ready SQL queries for dashboard widgets, not a
   fully published BI workspace.
 - AWS S3 output paths follow the convention `country_code`, `dataset`, and
-  `event_date` as required partition fields.
+  `event_date` as required partition fields. Curated output paths use the dedicated
+  curated-events bucket; raw/debug outputs may use a separate raw bucket or prefix.
 - The planned Unity Catalog namespace is catalog `energy_market_demo` with schemas
   `bronze`, `silver`, `gold`, and `observability`.

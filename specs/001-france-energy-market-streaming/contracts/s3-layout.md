@@ -1,9 +1,15 @@
 # S3 Layout Contract
 
-## Base Path
+## Raw/Debug Output Path
 
 ```text
-s3://<ENERGY_DEMO_S3_BUCKET>/<ENERGY_DEMO_S3_PREFIX>/country_code=FR/dataset=<dataset>/event_date=YYYY-MM-DD/
+s3://<ENERGY_DEMO_RAW_S3_BUCKET>/<ENERGY_DEMO_RAW_S3_PREFIX>/country_code=FR/dataset=raw_fr_energy_grid/event_date=YYYY-MM-DD/
+```
+
+## Dedicated Curated-Events Bucket Path
+
+```text
+s3://<ENERGY_DEMO_CURATED_S3_BUCKET>/<ENERGY_DEMO_CURATED_S3_PREFIX>/country_code=FR/dataset=<dataset>/event_date=YYYY-MM-DD/
 ```
 
 ## Required Partitions
@@ -28,6 +34,9 @@ s3://<ENERGY_DEMO_S3_BUCKET>/<ENERGY_DEMO_S3_PREFIX>/country_code=FR/dataset=<da
 ## Rules
 
 - Raw/debug outputs may use JSONL.
+- Curated normalized, analytics, and observability outputs must use the dedicated
+  curated-events bucket.
 - Analytics and observability outputs should use Parquet.
 - Paths must not include secret values.
-- If no reusable bucket exists, planning must create a future additive storage task.
+- The dedicated curated-events bucket must be added as an isolated demo storage
+  resource and must not modify existing infrastructure modules.

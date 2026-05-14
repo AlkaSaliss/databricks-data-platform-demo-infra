@@ -7,7 +7,8 @@ implementation tasks will create the referenced commands and files.
 
 - Existing Databricks workspace and Unity Catalog metastore from this repository.
 - Confluent Cloud cluster and API credentials.
-- AWS credentials or profile with access to the selected S3 bucket/prefix.
+- AWS credentials or profile with access to the raw/debug S3 prefix and the dedicated
+  curated-events S3 bucket/prefix.
 - Python 3.12 and uv.
 
 ## 2. Environment Variables
@@ -22,8 +23,10 @@ export CONFLUENT_SECURITY_PROTOCOL="SASL_SSL"
 export CONFLUENT_SASL_MECHANISM="PLAIN"
 export AWS_PROFILE="..."
 export AWS_REGION="eu-west-1"
-export ENERGY_DEMO_S3_BUCKET="..."
-export ENERGY_DEMO_S3_PREFIX="energy-market-command-center"
+export ENERGY_DEMO_RAW_S3_BUCKET="..."
+export ENERGY_DEMO_RAW_S3_PREFIX="energy-market-command-center/raw"
+export ENERGY_DEMO_CURATED_S3_BUCKET="..."
+export ENERGY_DEMO_CURATED_S3_PREFIX="energy-market-command-center/curated"
 export DATABRICKS_HOST="..."
 export DATABRICKS_AUTH_TYPE="..."
 ```
@@ -53,12 +56,12 @@ raw.fr.energy_grid
 S3 partitions:
 
 ```text
-s3://<bucket>/<prefix>/country_code=FR/dataset=raw_fr_energy_grid/event_date=YYYY-MM-DD/
-s3://<bucket>/<prefix>/country_code=FR/dataset=normalized_energy_market_events/event_date=YYYY-MM-DD/
-s3://<bucket>/<prefix>/country_code=FR/dataset=france_kpi_15min/event_date=YYYY-MM-DD/
-s3://<bucket>/<prefix>/country_code=FR/dataset=data_quality_observations/event_date=YYYY-MM-DD/
-s3://<bucket>/<prefix>/country_code=FR/dataset=late_event_observations/event_date=YYYY-MM-DD/
-s3://<bucket>/<prefix>/country_code=FR/dataset=pipeline_status_observations/event_date=YYYY-MM-DD/
+s3://<raw-or-debug-bucket>/<raw-prefix>/country_code=FR/dataset=raw_fr_energy_grid/event_date=YYYY-MM-DD/
+s3://<dedicated-curated-bucket>/<curated-prefix>/country_code=FR/dataset=normalized_energy_market_events/event_date=YYYY-MM-DD/
+s3://<dedicated-curated-bucket>/<curated-prefix>/country_code=FR/dataset=france_kpi_15min/event_date=YYYY-MM-DD/
+s3://<dedicated-curated-bucket>/<curated-prefix>/country_code=FR/dataset=data_quality_observations/event_date=YYYY-MM-DD/
+s3://<dedicated-curated-bucket>/<curated-prefix>/country_code=FR/dataset=late_event_observations/event_date=YYYY-MM-DD/
+s3://<dedicated-curated-bucket>/<curated-prefix>/country_code=FR/dataset=pipeline_status_observations/event_date=YYYY-MM-DD/
 ```
 
 Databricks namespace:
@@ -99,5 +102,7 @@ Run the Bronze/Silver/Gold assets, then execute:
 
 ## 7. Terraform Note
 
-No Terraform/Terragrunt change is required for MVP if an existing bucket or external
-location is usable. Additive demo storage IaC is a future hardening task only.
+A dedicated curated-events bucket is required for normalized, analytics, and
+observability outputs. If managed in this repository, it must be added as an isolated
+demo storage resource and must not modify existing infrastructure modules. Raw/debug
+storage may use a separate existing bucket or prefix.

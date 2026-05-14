@@ -43,10 +43,22 @@ dependencies are installed locally.
 **Alternatives considered**: Spark Structured Streaming and direct Databricks
 processing. Those would weaken the required Flink story for the interview demo.
 
+## Decision: Use a dedicated AWS S3 bucket for curated event outputs
+
+**Rationale**: Curated normalized, analytics, and observability event outputs are the
+demo's lakehouse landing product and should have a clear storage boundary, lifecycle,
+and access posture. The bucket must be created for the demo as an additive resource
+without modifying existing infrastructure modules.
+
+**Alternatives considered**: Reusing the Databricks workspace or metastore bucket for
+curated events. Reuse is simpler but weakens the separation between demo data product
+storage and platform-managed storage.
+
 ## Decision: Land curated data in AWS S3 before Databricks
 
 **Rationale**: S3 gives a durable cloud landing zone and avoids direct Flink-to-Delta
-complexity. Databricks can then ingest with Auto Loader or batch reads.
+complexity. Databricks can then ingest curated event outputs from the dedicated
+curated-events bucket with Auto Loader or batch reads.
 
 **Alternatives considered**: Direct Flink-to-Delta sink. It is explicitly out of scope
 for MVP and adds connector complexity.
@@ -75,12 +87,12 @@ observability separate from business Gold outputs.
 **Alternatives considered**: Single schema or hive_metastore. Both weaken governance
 story and table ownership clarity.
 
-## Decision: No Terraform changes required for MVP
+## Decision: Dedicated curated-events bucket is additive, not an existing module change
 
 **Rationale**: Existing infrastructure already provisions a Databricks workspace and
-UC metastore, with outputs for workspace and metastore buckets. The MVP can reuse an
-available bucket or configure a manually provided S3 prefix.
+UC metastore. The demo requires a dedicated curated-events bucket, but it must be
+implemented as an additive demo module/isolated stack. Existing Terraform modules must
+not be changed.
 
-**Alternatives considered**: Add a demo storage module now. That is optional
-hardening and should be deferred unless planning or implementation proves reuse is
-not possible.
+**Alternatives considered**: Modify `workspace-infra` or `uc-metastore-infra` to add
+the bucket. That would violate the preservation boundary for shared infrastructure.

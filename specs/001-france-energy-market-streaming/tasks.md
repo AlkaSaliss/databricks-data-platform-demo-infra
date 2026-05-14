@@ -72,7 +72,7 @@ Each task includes:
 - [ ] T008 [P] Define AWS/S3 config template in `apps/energy-market-command-center/configs/s3.example.yml`
   - **Files**: `apps/energy-market-command-center/configs/s3.example.yml`
   - **Dependencies**: T001
-  - **Acceptance criteria**: Config includes bucket, prefix, region, profile selector, and required partition convention.
+  - **Acceptance criteria**: Config includes raw/debug bucket or prefix, dedicated curated-events bucket/prefix, region, profile selector, and required partition convention.
   - **Test requirement**: Config parser unit test planned in T012.
   - **Parallel**: yes
 
@@ -347,17 +347,24 @@ Each task includes:
 
 ## Phase 7: AWS S3 Landing
 
+- [ ] T073 Add isolated curated-events storage IaC in `src/live/dev/eu-west-1/energy-market-demo-storage/terragrunt.hcl`
+  - **Files**: `src/live/dev/eu-west-1/energy-market-demo-storage/terragrunt.hcl`, `src/modules/energy-market-demo-storage/`
+  - **Dependencies**: T003, T008
+  - **Acceptance criteria**: Future implementation creates a dedicated curated-events S3 bucket as isolated additive IaC and does not modify existing `src/modules` or active `src/live` stacks.
+  - **Test requirement**: Future implementation must run targeted Terragrunt validation for the new isolated stack and `git diff -- src/modules/account-admin src/modules/network-infra src/modules/terraform-state-infra src/modules/uc-metastore-infra src/modules/workspace-infra src/live/dev/eu-west-1/account-admin src/live/dev/eu-west-1/network-infra src/live/dev/eu-west-1/terraform-state-infra src/live/dev/eu-west-1/uc-metastore-infra src/live/dev/eu-west-1/workspace-infra`.
+  - **Parallel**: no
+
 - [ ] T046 Implement S3 path builder in `apps/energy-market-command-center/src/energy_market_command_center/storage/s3_paths.py`
   - **Files**: `apps/energy-market-command-center/src/energy_market_command_center/storage/s3_paths.py`
-  - **Dependencies**: T008
-  - **Acceptance criteria**: Paths follow `country_code=FR/dataset=<dataset>/event_date=YYYY-MM-DD/`.
+  - **Dependencies**: T008, T073
+  - **Acceptance criteria**: Raw/debug paths use the raw bucket or prefix; curated paths use the dedicated curated-events bucket/prefix; all paths follow `country_code=FR/dataset=<dataset>/event_date=YYYY-MM-DD/`.
   - **Test requirement**: Unit tests in T047.
   - **Parallel**: no
 
 - [ ] T047 [P] Add S3 path tests in `apps/energy-market-command-center/tests/unit/test_s3_paths.py`
   - **Files**: `apps/energy-market-command-center/tests/unit/test_s3_paths.py`
   - **Dependencies**: T046
-  - **Acceptance criteria**: Tests cover all datasets and reject missing partition fields.
+  - **Acceptance criteria**: Tests cover raw/debug routing, dedicated curated-events bucket routing, all datasets, and rejection of missing partition fields.
   - **Test requirement**: `uv run pytest apps/energy-market-command-center/tests/unit/test_s3_paths.py`
   - **Parallel**: yes
 
@@ -378,7 +385,7 @@ Each task includes:
 - [ ] T050 Add S3 permission smoke test in `apps/energy-market-command-center/tests/integration/test_s3_permissions.py`
   - **Files**: `apps/energy-market-command-center/tests/integration/test_s3_permissions.py`
   - **Dependencies**: T048
-  - **Acceptance criteria**: Test is skipped unless AWS/S3 env vars are present and validates object write/read/delete in demo prefix.
+  - **Acceptance criteria**: Test is skipped unless AWS/S3 env vars are present and validates object write/read/delete in both the raw/debug bucket or prefix and dedicated curated-events bucket/prefix.
   - **Test requirement**: `uv run pytest apps/energy-market-command-center/tests/integration/test_s3_permissions.py`
   - **Parallel**: no
 
@@ -505,7 +512,7 @@ Each task includes:
 - [ ] T067 Document expected outputs and screenshot checklist in `apps/energy-market-command-center/docs/expected-outputs.md`
   - **Files**: `apps/energy-market-command-center/docs/expected-outputs.md`
   - **Dependencies**: T062, T063
-  - **Acceptance criteria**: Document lists expected Confluent topic, S3 partitions, Databricks tables, and dashboard query outputs.
+  - **Acceptance criteria**: Document lists expected Confluent topic, raw/debug S3 partition, dedicated curated-events S3 bucket partitions, Databricks tables, and dashboard query outputs.
   - **Test requirement**: Manual review against quickstart.
   - **Parallel**: no
 
@@ -557,7 +564,7 @@ Critical path:
 
 ```text
 T001 -> T005 -> T010 -> T014 -> T015 -> T019 -> T028 -> T038 -> T044
-     -> T048 -> T051 -> T053 -> T056 -> T058 -> T062 -> T066 -> T068
+     -> T073 -> T048 -> T051 -> T053 -> T056 -> T058 -> T062 -> T066 -> T068
 ```
 
 Infrastructure preservation gate:
@@ -637,7 +644,8 @@ Suggested MVP implementation sequence:
 ## Format Validation
 
 - All executable tasks use markdown checkbox format.
-- All task IDs are sequential from T001 to T072.
+- Task IDs run from T001 to T073; T073 was added as an explicit curated-events
+  bucket task and is a dependency for S3 landing work.
 - All task descriptions include file paths.
 - Each task includes dependencies, acceptance criteria, test requirement, and parallel status.
 - Tasks are dependency-ordered and grouped by requested phase.
