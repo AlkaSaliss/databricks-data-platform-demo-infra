@@ -1,0 +1,13 @@
+confluent:
+  bootstrap_servers:
+    env: CONFLUENT_BOOTSTRAP_SERVERS
+  api_key:
+    env: CONFLUENT_API_KEY
+  api_secret:
+    env: CONFLUENT_API_SECRET
+  security_protocol:
+    env: CONFLUENT_SECURITY_PROTOCOL
+    default: SASL_SSL
+  sasl_mechanism:
+    env: CONFLUENT_SASL_MECHANISM
+    default: PLAIN

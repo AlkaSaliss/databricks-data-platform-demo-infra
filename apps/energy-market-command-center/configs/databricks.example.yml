@@ -1,0 +1,20 @@
+databricks:
+  host:
+    env: DATABRICKS_HOST
+  auth_type:
+    env: DATABRICKS_AUTH_TYPE
+  token:
+    env: DATABRICKS_TOKEN
+    optional: true
+  client_id:
+    env: DATABRICKS_CLIENT_ID
+    optional: true
+  client_secret:
+    env: DATABRICKS_CLIENT_SECRET
+    optional: true
+  catalog: energy_market_demo
+  schemas:
+    - bronze
+    - silver
+    - gold
+    - observability

@@ -1,0 +1,23 @@
+aws:
+  profile:
+    env: AWS_PROFILE
+  region:
+    env: AWS_REGION
+    default: eu-west-1
+s3:
+  raw:
+    bucket:
+      env: ENERGY_DEMO_RAW_S3_BUCKET
+    prefix:
+      env: ENERGY_DEMO_RAW_S3_PREFIX
+      default: energy-market-command-center/raw
+  curated_events:
+    bucket:
+      env: ENERGY_DEMO_CURATED_S3_BUCKET
+    prefix:
+      env: ENERGY_DEMO_CURATED_S3_PREFIX
+      default: energy-market-command-center/curated
+  partition_convention:
+    - country_code=FR
+    - dataset=<dataset_name>
+    - event_date=YYYY-MM-DD
