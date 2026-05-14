@@ -101,6 +101,37 @@ make deploy-active-all ENV=dev REGION=eu-west-1
 make destroy-active-all ENV=dev REGION=eu-west-1
 ```
 
+## Independent Confluent Kafka Infra
+
+The Confluent Kafka stack is deployed independently from the Databricks/AWS stack sequence. It is not included in `deploy-all`, `deploy-active-all`, CI active planning, or destroy-all targets.
+
+Source local Confluent configuration before running the stack:
+
+```bash
+. ./bin/set_env_vars.sh
+. ./bin/set_aws_credentials.sh
+```
+
+Then run the Kafka stack directly:
+
+```bash
+make plan STACK=confluent-kafka-infra
+make deploy STACK=confluent-kafka-infra
+```
+
+The first implementation batch creates one producer MVP topic: `raw.fr.energy_grid`.
+
+The Confluent Kafka GitHub workflow validates and plans this stack independently. Configure these GitHub secrets before using it:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `CONFLUENT_CLOUD_API_KEY`
+- `CONFLUENT_CLOUD_API_SECRET`
+
+Optional secret:
+
+- `AWS_SESSION_TOKEN`
+
 ## GitHub Actions CI/CD
 
 The repository uses two GitHub Actions workflows:
