@@ -109,6 +109,7 @@ aws-credentials
 
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -129,6 +130,7 @@ wheels/
 .installed.cfg
 *.egg
 PIPFILE.lock
+uv.lock
 
 # Virtual environments
 venv/

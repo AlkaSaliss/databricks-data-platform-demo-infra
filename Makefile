@@ -1,12 +1,16 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars kafka-produce-sample kafka-produce-sample-dry-run kafka-produce-real-dry-run kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-run producer-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
 STACK ?= account-admin
+COUNT ?= 3
+LAST_DAYS ?= 1
+PYTHON ?= python3
 
 SRC_DIR := src
+ENERGY_PRODUCER_APP_DIR := apps/producers/energy_market
 LIVE_DIR := $(SRC_DIR)/live/$(ENV)/$(REGION)
 STACK_DIR := $(LIVE_DIR)/$(STACK)
 
@@ -77,6 +81,36 @@ fmt-check: ## Check Terraform and Terragrunt formatting without rewriting files
 
 clean: ## Remove Terragrunt and Terraform cache directories
 	@find . -type d \( -name '.terragrunt-cache' -o -name '.terraform' \) -prune -exec rm -rf {} + 2>/dev/null || true
+
+kafka-export-vars: ## Show commands that export Kafka producer variables from Terraform outputs
+	@printf '%s\n' \
+		'. ./bin/set_env_vars.sh' \
+		'. ./bin/set_aws_credentials.sh' \
+		'. ./bin/set_kafka_output_api_keys.sh'
+
+kafka-produce-sample: ## Fetch real France Eco2mix data and publish events to Kafka
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT)
+
+kafka-produce-sample-dry-run: ## Print offline sample France events without contacting Kafka
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --source sample --dry-run
+
+kafka-produce-real-dry-run: ## Fetch real France Eco2mix data and print events without publishing
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --dry-run
+
+kafka-producer-docker-build: ## Build the Docker image for the France Eco2mix producer
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) build france-eco2mix-producer
+
+kafka-producer-docker-dry-run: ## Run offline sample producer dry-run in Docker
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --count $(COUNT) --source sample --dry-run
+
+kafka-producer-docker-real-dry-run: ## Run real last-days Eco2mix producer dry-run in Docker
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS) --dry-run
+
+kafka-producer-docker-run: ## Fetch real last-days Eco2mix data and publish from Docker
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS)
+
+producer-test: ## Run Python producer tests
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m pytest
 
 plan-all: ## Run plan for all stacks in deployment order
 	@for stack in $(DEPLOY_ORDER); do \
