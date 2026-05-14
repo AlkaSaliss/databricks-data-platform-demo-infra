@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/contracts/raw-fr-energy-grid.schema.json",
+  "title": "Raw France Energy Grid Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "source_system",
+    "country_code",
+    "ingestion_time",
+    "source_event_time",
+    "payload"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "source_system": { "const": "rte_odre_eco2mix" },
+    "country_code": { "const": "FR" },
+    "ingestion_time": { "type": "string", "format": "date-time" },
+    "source_event_time": { "type": "string", "format": "date-time" },
+    "payload_hash": { "type": "string" },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

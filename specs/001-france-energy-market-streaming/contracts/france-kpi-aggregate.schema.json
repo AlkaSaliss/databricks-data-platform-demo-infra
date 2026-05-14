@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/contracts/france-kpi-aggregate.schema.json",
+  "title": "France KPI Aggregate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "window_start",
+    "window_end",
+    "country_code",
+    "market_region",
+    "event_count",
+    "late_event_count",
+    "invalid_event_count",
+    "processing_time"
+  ],
+  "properties": {
+    "window_start": { "type": "string", "format": "date-time" },
+    "window_end": { "type": "string", "format": "date-time" },
+    "country_code": { "const": "FR" },
+    "market_region": { "const": "FR_NATIONAL" },
+    "demand_mw": { "type": ["number", "null"], "minimum": 0 },
+    "total_generation_mw": { "type": ["number", "null"], "minimum": 0 },
+    "renewable_generation_mw": { "type": ["number", "null"], "minimum": 0 },
+    "renewable_share": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "event_count": { "type": "integer", "minimum": 0 },
+    "late_event_count": { "type": "integer", "minimum": 0 },
+    "invalid_event_count": { "type": "integer", "minimum": 0 },
+    "processing_time": { "type": "string", "format": "date-time" }
+  }
+}

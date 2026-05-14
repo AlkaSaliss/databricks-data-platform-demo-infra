@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/contracts/normalized-energy-market-event.schema.json",
+  "title": "Normalized Energy Market Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "country_code",
+    "market_region",
+    "event_time",
+    "metric_name",
+    "metric_value",
+    "unit",
+    "source_system",
+    "ingestion_time",
+    "processing_time",
+    "data_quality_status"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "country_code": { "const": "FR" },
+    "market_region": { "const": "FR_NATIONAL" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "metric_name": {
+      "type": "string",
+      "enum": [
+        "electricity_consumption",
+        "total_generation",
+        "wind_generation",
+        "solar_generation",
+        "hydro_generation",
+        "nuclear_generation",
+        "gas_generation",
+        "coal_generation",
+        "oil_generation",
+        "bioenergy_generation",
+        "renewable_generation",
+        "renewable_share",
+        "import_export_balance"
+      ]
+    },
+    "metric_value": { "type": "number" },
+    "unit": { "type": "string", "minLength": 1 },
+    "energy_source": { "type": ["string", "null"] },
+    "source_system": { "const": "rte_odre_eco2mix" },
+    "ingestion_time": { "type": "string", "format": "date-time" },
+    "processing_time": { "type": "string", "format": "date-time" },
+    "data_quality_status": {
+      "type": "string",
+      "enum": ["valid", "invalid", "warning"]
+    },
+    "quality_error_code": { "type": ["string", "null"] },
+    "quality_error_message": { "type": ["string", "null"] },
+    "source_payload_hash": { "type": ["string", "null"] }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/contracts/observability-events.schema.json",
+  "title": "Energy Market Observability Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "observation_type",
+    "observation_id",
+    "country_code",
+    "detected_at"
+  ],
+  "properties": {
+    "observation_type": {
+      "type": "string",
+      "enum": ["data_quality", "late_event", "pipeline_status"]
+    },
+    "observation_id": { "type": "string", "minLength": 1 },
+    "event_id": { "type": ["string", "null"] },
+    "country_code": { "const": "FR" },
+    "source_system": { "type": ["string", "null"] },
+    "rule_id": { "type": ["string", "null"] },
+    "severity": { "type": ["string", "null"], "enum": ["warning", "error", null] },
+    "reason": { "type": ["string", "null"] },
+    "event_time": { "type": ["string", "null"], "format": "date-time" },
+    "watermark_time": { "type": ["string", "null"], "format": "date-time" },
+    "lateness_seconds": { "type": ["integer", "null"], "minimum": 0 },
+    "freshness_seconds": { "type": ["integer", "null"], "minimum": 0 },
+    "processing_latency_seconds": { "type": ["integer", "null"], "minimum": 0 },
+    "pipeline_status": {
+      "type": ["string", "null"],
+      "enum": ["healthy", "stale", "degraded", "failed", null]
+    },
+    "detected_at": { "type": "string", "format": "date-time" }
+  }
+}
