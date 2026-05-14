@@ -49,7 +49,7 @@ remote_state {
 generate "provider" {
   path      = "provider.tf"
   if_exists = "overwrite_terragrunt"
-  contents = <<EOF
+  contents = contains(["confluent-kafka-infra"], local.component) ? "" : <<EOF
 provider "aws" {
   region = "${local.aws_region}"
   

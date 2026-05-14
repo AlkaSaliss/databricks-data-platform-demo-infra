@@ -100,6 +100,28 @@
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
+### Data Platform Constraints *(mandatory for Energy Market Command Center features)*
+
+- **Scope**: Feature MUST state whether it is part of the France MVP or a later
+  country extension. MVP features MUST be France RTE / ODRÉ éCO2mix only.
+- **Infrastructure Boundary**: Feature MUST state whether it touches existing
+  Terraform/Terragrunt modules or live stacks. Default is additive, isolated changes.
+- **Cloud Services**: Feature MUST use Confluent Cloud for Kafka and AWS S3 for
+  storage in the MVP path. Local Kafka and MinIO MUST NOT be specified as MVP
+  dependencies.
+- **Secrets**: Feature MUST list required secret inputs by name and source mechanism
+  without including secret values.
+- **Contracts**: Feature MUST identify Kafka message contracts, Flink output
+  contracts, S3 object layout expectations, and Databricks table schemas.
+- **Streaming Semantics**: Feature MUST specify event-time fields, watermark policy,
+  deduplication key, and late-event handling where streaming is involved.
+- **Lakehouse Layers**: Feature MUST identify Bronze, Silver, and Gold outputs with
+  Unity Catalog-compatible names, comments, and ownership assumptions.
+- **Observability**: Feature MUST define outputs for freshness, invalid records, late
+  events, processing latency, and pipeline status where applicable.
+- **Demo Narrative**: Feature MUST state how it contributes to the 10-minute
+  interview demo.
+
 ## Success Criteria *(mandatory)*
 
 <!--

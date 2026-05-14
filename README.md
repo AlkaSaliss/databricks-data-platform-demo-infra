@@ -1,5 +1,9 @@
 # Databricks Data Platform Demo Infra
 
+[![PR Infrastructure Checks](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml)
+[![Deploy Databricks Demo Workspace Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml)
+[![Confluent Kafka Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml)
+
 This repository contains Terraform modules and Terragrunt live stacks for deploying a Databricks data platform foundation on AWS.
 
 ## Stack Overview
@@ -100,6 +104,37 @@ make deploy-active-all ENV=dev REGION=eu-west-1
 # Destroy the active CI/CD stacks in reverse order, excluding terraform-state-infra
 make destroy-active-all ENV=dev REGION=eu-west-1
 ```
+
+## Independent Confluent Kafka Infra
+
+The Confluent Kafka stack is deployed independently from the Databricks/AWS stack sequence. It is not included in `deploy-all`, `deploy-active-all`, CI active planning, or destroy-all targets.
+
+Source local Confluent configuration before running the stack:
+
+```bash
+. ./bin/set_env_vars.sh
+. ./bin/set_aws_credentials.sh
+```
+
+Then run the Kafka stack directly:
+
+```bash
+make plan STACK=confluent-kafka-infra
+make deploy STACK=confluent-kafka-infra
+```
+
+The first implementation batch creates one producer MVP topic: `raw.fr.energy_grid`.
+
+The Confluent Kafka GitHub workflow validates and plans this stack independently. Configure these GitHub secrets before using it:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `CONFLUENT_CLOUD_API_KEY`
+- `CONFLUENT_CLOUD_API_SECRET`
+
+Optional secret:
+
+- `AWS_SESSION_TOKEN`
 
 ## GitHub Actions CI/CD
 
