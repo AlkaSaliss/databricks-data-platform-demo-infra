@@ -1,0 +1,51 @@
+name: Producer Tests
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/producer-tests.yml"
+      - "Makefile"
+      - "apps/producers/**"
+      - "doc/implementation-batches/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: producer-tests-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test local producers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        shell: bash
+        working-directory: apps/producers/energy_market
+        run: python -m pip install -e ".[test]"
+
+      - name: Run tests
+        shell: bash
+        run: make producer-test
+
+      - name: Run producer dry-run
+        shell: bash
+        run: make kafka-produce-sample-dry-run
+
+      - name: Build producer Docker image
+        shell: bash
+        run: make kafka-producer-docker-build
+
+      - name: Run producer Docker dry-run
+        shell: bash
+        run: make kafka-producer-docker-dry-run

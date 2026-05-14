@@ -3,6 +3,7 @@
 [![PR Infrastructure Checks](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml)
 [![Deploy Databricks Demo Workspace Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml)
 [![Confluent Kafka Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml)
+[![Producer Tests](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml)
 
 This repository contains Terraform modules and Terragrunt live stacks for deploying a Databricks data platform foundation on AWS.
 
@@ -136,12 +137,59 @@ Optional secret:
 
 - `AWS_SESSION_TOKEN`
 
+## Local Kafka Producers
+
+Install producer dependencies:
+
+```bash
+python3 -m pip install -e "./apps/producers/energy_market[test]"
+```
+
+Validate offline France sample event generation without contacting Kafka:
+
+```bash
+make kafka-produce-sample-dry-run
+```
+
+Validate real Eco2mix API retrieval without publishing:
+
+```bash
+make kafka-produce-real-dry-run
+```
+
+To publish real Eco2mix events to `raw.fr.energy_grid`, first export Kafka connection settings from the Confluent Terraform outputs:
+
+```bash
+. ./bin/set_env_vars.sh
+. ./bin/set_aws_credentials.sh
+. ./bin/set_kafka_output_api_keys.sh
+make kafka-produce-sample
+```
+
+Docker Compose packaging is available for the producer app:
+
+```bash
+make kafka-producer-docker-build
+make kafka-producer-docker-real-dry-run LAST_DAYS=1
+```
+
+To publish the last N days of measured Eco2mix records from Docker:
+
+```bash
+. ./bin/set_env_vars.sh
+. ./bin/set_aws_credentials.sh
+. ./bin/set_kafka_output_api_keys.sh
+make kafka-producer-docker-run LAST_DAYS=2
+```
+
 ## GitHub Actions CI/CD
 
-The repository uses two GitHub Actions workflows:
+The repository uses these GitHub Actions workflows:
 
-- `.github/workflows/pr-infra.yml` runs validation and planning on pull requests.
-- `.github/workflows/deploy-infra.yml` runs manual deployment for an approved commit.
+- `.github/workflows/pr-infra.yml` runs validation and planning for the active AWS/Databricks stacks on pull requests.
+- `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
+- `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
+- `.github/workflows/producer-tests.yml` runs producer unit tests, sample dry-runs, and Docker image validation without publishing to Kafka.
 
 Both workflows target the active stacks sequentially for `dev/eu-west-1`:
 
