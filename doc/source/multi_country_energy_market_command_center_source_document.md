@@ -24,7 +24,7 @@ Apache Flink
 - windowed aggregations
         |
         v
-S3 / MinIO / cloud object storage
+S3
         |
         v
 Databricks Lakehouse
