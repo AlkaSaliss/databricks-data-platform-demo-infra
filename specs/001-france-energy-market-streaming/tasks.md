@@ -18,28 +18,28 @@ Each task includes:
 
 ## Phase 0: Repository Integration
 
-- [ ] T001 [P] Create demo application directory skeleton in `apps/energy-market-command-center/`
+- [X] T001 [P] Create demo application directory skeleton in `apps/energy-market-command-center/`
   - **Files**: `apps/energy-market-command-center/README.md`, `apps/energy-market-command-center/src/energy_market_command_center/__init__.py`, `apps/energy-market-command-center/tests/`
   - **Dependencies**: none
   - **Acceptance criteria**: App directory exists and contains only demo-specific files.
   - **Test requirement**: `find apps/energy-market-command-center -maxdepth 3 -type d`
   - **Parallel**: yes
 
-- [ ] T002 [P] Create Databricks asset directory skeleton in `databricks/energy-market-command-center/`
+- [X] T002 [P] Create Databricks asset directory skeleton in `databricks/energy-market-command-center/`
   - **Files**: `databricks/energy-market-command-center/notebooks/`, `databricks/energy-market-command-center/sql/`, `databricks/energy-market-command-center/workflows/`
   - **Dependencies**: none
   - **Acceptance criteria**: Databricks assets are isolated from `src/live` and `src/modules`.
   - **Test requirement**: `find databricks/energy-market-command-center -maxdepth 3 -type d`
   - **Parallel**: yes
 
-- [ ] T003 Verify existing infrastructure layout remains untouched in `src/live/` and `src/modules/`
+- [X] T003 Verify existing infrastructure layout remains untouched in `src/live/` and `src/modules/`
   - **Files**: `src/live/`, `src/modules/`
   - **Dependencies**: T001, T002
   - **Acceptance criteria**: No tracked Terraform/Terragrunt module or live stack files are modified by demo setup.
   - **Test requirement**: `git diff -- src/live src/modules`
   - **Parallel**: no
 
-- [ ] T004 [P] Add minimal root README pointer to the demo in `README.md`
+- [X] T004 [P] Add minimal root README pointer to the demo in `README.md`
   - **Files**: `README.md`
   - **Dependencies**: T001, T002
   - **Acceptance criteria**: README mentions the demo path without changing existing infra instructions.

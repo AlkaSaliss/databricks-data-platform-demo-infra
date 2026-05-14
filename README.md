@@ -18,10 +18,14 @@ Recommended deployment order is the same as the list above. Destroy order is the
 
 ```text
 .
+├── apps/
+│   └── energy-market-command-center/
 ├── Makefile
 ├── bin/
 │   ├── set_aws_credentials.sh
 │   └── set_env_vars.sh
+├── databricks/
+│   └── energy-market-command-center/
 ├── doc/
 │   ├── account-admin.md
 │   ├── network-infra.md
@@ -42,6 +46,11 @@ Recommended deployment order is the same as the list above. Destroy order is the
     ├── modules/
     └── root.hcl
 ```
+
+The France Energy Market Command Center demo is isolated under
+`apps/energy-market-command-center/` for local producer and processing code, with
+Databricks notebooks, SQL, and workflow assets under
+`databricks/energy-market-command-center/`.
 
 ## Environment Variables
 
