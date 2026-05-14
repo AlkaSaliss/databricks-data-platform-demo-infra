@@ -1,5 +1,9 @@
 # Databricks Data Platform Demo Infra
 
+[![PR Infrastructure Checks](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml)
+[![Deploy Databricks Demo Workspace Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml)
+[![Confluent Kafka Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml)
+
 This repository contains Terraform modules and Terragrunt live stacks for deploying a Databricks data platform foundation on AWS.
 
 ## Stack Overview
