@@ -31,7 +31,32 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Document PASS/FAIL for each repository constitution gate:
+
+- **Existing Infrastructure Preservation**: No existing `src/modules` or active
+  `src/live` stack changes unless tied to explicit approved spec tasks.
+- **Cloud-Backed MVP**: MVP uses Confluent Cloud for Kafka and AWS S3 for storage;
+  local Kafka and MinIO are excluded from the MVP path.
+- **France-First Scope**: France RTE / ODRÉ éCO2mix is the only implementation
+  country until the MVP is complete.
+- **Spec-First Delivery**: Constitution, spec, plan, contracts, data model,
+  quickstart, and tasks exist before implementation starts.
+- **Secrets Safety**: No credentials or tokens are committed; all secrets flow
+  through environment variables, local profiles, GitHub secrets, or secret managers.
+- **Streaming Correctness**: Event time, watermarks, deterministic deduplication,
+  and late-event handling are specified.
+- **Data Contract Discipline**: Kafka messages, Flink outputs, S3 objects, and
+  Databricks schemas have required fields and validation rules.
+- **Lakehouse Discipline**: Databricks assets follow Bronze/Silver/Gold layering,
+  Unity Catalog-compatible names, comments, and ownership assumptions.
+- **Observability by Design**: Freshness, invalid records, late events, latency,
+  and pipeline status are first-class outputs.
+- **Interview Demo Readiness**: The feature supports a 10-minute narrative covering
+  business context, architecture, streaming, lakehouse, analytics, and extensibility.
+- **MVP Simplicity**: The France end-to-end pipeline is prioritized over incomplete
+  multi-country complexity.
+- **IaC Alignment**: Required cloud resources reuse existing outputs or are additive
+  Terraform/Terragrunt resources with clear boundaries.
 
 ## Project Structure
 
