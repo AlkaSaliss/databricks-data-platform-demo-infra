@@ -116,4 +116,5 @@ def test_sql_ddl_contains_kafka_sasl_and_s3_parquet_sink() -> None:
     assert "org.apache.flink.kafka.shaded.org.apache.kafka.common.security.plain.PlainLoginModule" in source
     assert "'format' = 'parquet'" in sink
     assert "s3://bucket/bronze/raw_fr_energy_grid/" in sink
-    assert "bronze_field(raw_event_json, 'payload_json')" in insert
+    assert "JSON_QUERY(raw_event_json, '$.payload')" in insert
+    assert "SUBSTRING(JSON_VALUE(raw_event_json, '$.source_event_time'), 1, 10)" in insert

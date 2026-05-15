@@ -130,22 +130,21 @@ def insert_sql() -> str:
     return """
 INSERT INTO raw_fr_energy_grid_bronze
 SELECT
-  bronze_field(raw_event_json, 'event_id'),
-  bronze_field(raw_event_json, 'source_system'),
-  bronze_field(raw_event_json, 'country_code'),
-  bronze_field(raw_event_json, 'source_event_time'),
-  bronze_field(raw_event_json, 'ingestion_time'),
-  bronze_field(raw_event_json, 'payload_json'),
-  bronze_field(raw_event_json, 'raw_event_json'),
-  bronze_field(raw_event_json, 'event_date')
+  JSON_VALUE(raw_event_json, '$.event_id'),
+  JSON_VALUE(raw_event_json, '$.source_system'),
+  JSON_VALUE(raw_event_json, '$.country_code'),
+  JSON_VALUE(raw_event_json, '$.source_event_time'),
+  JSON_VALUE(raw_event_json, '$.ingestion_time'),
+  JSON_QUERY(raw_event_json, '$.payload'),
+  raw_event_json,
+  SUBSTRING(JSON_VALUE(raw_event_json, '$.source_event_time'), 1, 10)
 FROM raw_fr_energy_grid_kafka
 """.strip()
 
 
 def run_job(config: BronzeSinkConfig) -> None:
     from pyflink.datastream import StreamExecutionEnvironment
-    from pyflink.table import DataTypes, EnvironmentSettings, StreamTableEnvironment
-    from pyflink.table.udf import udf
+    from pyflink.table import EnvironmentSettings, StreamTableEnvironment
 
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(30000)
@@ -153,10 +152,6 @@ def run_job(config: BronzeSinkConfig) -> None:
     table_env = StreamTableEnvironment.create(env, environment_settings=settings)
     table_env.get_config().set("pipeline.name", "raw-fr-energy-grid-to-s3-bronze")
 
-    table_env.create_temporary_function(
-        "bronze_field",
-        udf(parse_bronze_field, result_type=DataTypes.STRING()),
-    )
     table_env.execute_sql(kafka_source_ddl(config))
     table_env.execute_sql(bronze_sink_ddl(config))
     table_env.execute_sql(insert_sql()).wait()
