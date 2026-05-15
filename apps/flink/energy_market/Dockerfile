@@ -16,6 +16,7 @@ COPY pyproject.toml ./
 COPY jobs ./jobs
 
 RUN ln -sf /opt/flink/opt/flink-s3-fs-hadoop-*.jar /opt/flink/lib/ \
+    && chmod 0644 /opt/flink/lib/flink-sql-connector-kafka-*.jar /opt/flink/lib/flink-parquet-*.jar \
     && python3 -m pip install --no-cache-dir --upgrade pip \
     && python3 -m pip install --no-cache-dir .
 

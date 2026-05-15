@@ -43,7 +43,9 @@ class BronzeSinkConfig:
             )
 
         return cls(
-            kafka_bootstrap_servers=required_vars["FLINK_KAFKA_BOOTSTRAP_SERVERS"] or "",
+            kafka_bootstrap_servers=normalize_bootstrap_servers(
+                required_vars["FLINK_KAFKA_BOOTSTRAP_SERVERS"] or ""
+            ),
             kafka_topic=required_vars["FLINK_KAFKA_TOPIC"] or "",
             kafka_api_key=required_vars["FLINK_KAFKA_API_KEY"] or "",
             kafka_api_secret=required_vars["FLINK_KAFKA_API_SECRET"] or "",
@@ -55,6 +57,14 @@ class BronzeSinkConfig:
 def event_date_from_source_time(source_event_time: str) -> str:
     normalized = source_event_time.replace("Z", "+00:00")
     return datetime.fromisoformat(normalized).date().isoformat()
+
+
+def normalize_bootstrap_servers(bootstrap_servers: str) -> str:
+    if bootstrap_servers.startswith("SASL_SSL://"):
+        return bootstrap_servers.removeprefix("SASL_SSL://")
+    if bootstrap_servers.startswith("PLAINTEXT://"):
+        return bootstrap_servers.removeprefix("PLAINTEXT://")
+    return bootstrap_servers
 
 
 def bronze_record_from_event(event: Mapping[str, Any]) -> dict[str, str]:

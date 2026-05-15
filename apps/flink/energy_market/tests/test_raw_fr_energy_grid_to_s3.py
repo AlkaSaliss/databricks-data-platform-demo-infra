@@ -12,6 +12,7 @@ from jobs.raw_fr_energy_grid_to_s3 import (
     event_date_from_source_time,
     insert_sql,
     kafka_source_ddl,
+    normalize_bootstrap_servers,
     parse_bronze_field,
 )
 
@@ -42,8 +43,20 @@ def test_config_reads_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     config = BronzeSinkConfig.from_env()
 
     assert config.kafka_topic == "raw.fr.energy_grid"
+    assert config.kafka_bootstrap_servers == "pkc.example.aws.confluent.cloud:9092"
     assert config.kafka_group_id == "energy-market-flink-bronze"
     assert config.s3_bronze_uri == "s3://bucket/bronze/raw_fr_energy_grid/"
+
+
+def test_config_strips_confluent_bootstrap_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FLINK_KAFKA_BOOTSTRAP_SERVERS", "SASL_SSL://pkc.example:9092")
+    monkeypatch.setenv("FLINK_KAFKA_TOPIC", "raw.fr.energy_grid")
+    monkeypatch.setenv("FLINK_KAFKA_API_KEY", "key")
+    monkeypatch.setenv("FLINK_KAFKA_API_SECRET", "secret")
+    monkeypatch.setenv("FLINK_S3_BRONZE_URI", "s3://bucket/bronze/raw_fr_energy_grid/")
+
+    assert BronzeSinkConfig.from_env().kafka_bootstrap_servers == "pkc.example:9092"
+    assert normalize_bootstrap_servers("PLAINTEXT://localhost:9092") == "localhost:9092"
 
 
 def test_bronze_record_preserves_raw_envelope_and_payload_json() -> None:
