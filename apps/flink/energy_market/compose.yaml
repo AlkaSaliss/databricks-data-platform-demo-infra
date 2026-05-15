@@ -1,0 +1,53 @@
+services:
+  jobmanager:
+    build:
+      context: .
+    image: energy-market-pyflink:local
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: jobmanager
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_REGION: ${AWS_REGION:-eu-west-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-west-1}
+
+  taskmanager:
+    image: energy-market-pyflink:local
+    command: taskmanager
+    depends_on:
+      - jobmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: jobmanager
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_REGION: ${AWS_REGION:-eu-west-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-west-1}
+
+  job-submitter:
+    image: energy-market-pyflink:local
+    depends_on:
+      - jobmanager
+      - taskmanager
+    command:
+      - flink
+      - run
+      - -m
+      - jobmanager:8081
+      - -py
+      - /opt/energy-market-flink/jobs/raw_fr_energy_grid_to_s3.py
+    environment:
+      FLINK_KAFKA_BOOTSTRAP_SERVERS: ${FLINK_KAFKA_BOOTSTRAP_SERVERS:-}
+      FLINK_KAFKA_TOPIC: ${FLINK_KAFKA_TOPIC:-}
+      FLINK_KAFKA_API_KEY: ${FLINK_KAFKA_API_KEY:-}
+      FLINK_KAFKA_API_SECRET: ${FLINK_KAFKA_API_SECRET:-}
+      FLINK_KAFKA_GROUP_ID: ${FLINK_KAFKA_GROUP_ID:-energy-market-flink-bronze}
+      FLINK_S3_BRONZE_URI: ${FLINK_S3_BRONZE_URI:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_REGION: ${AWS_REGION:-eu-west-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-west-1}

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars kafka-produce-sample kafka-produce-sample-dry-run kafka-produce-real-dry-run kafka-produce-scheduled-dry-run kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run producer-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars flink-export-vars kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -19,13 +19,14 @@ LOG_FORMAT ?= json
 
 SRC_DIR := src
 ENERGY_PRODUCER_APP_DIR := apps/producers/energy_market
+ENERGY_FLINK_APP_DIR := apps/flink/energy_market
 LIVE_DIR := $(SRC_DIR)/live/$(ENV)/$(REGION)
 STACK_DIR := $(LIVE_DIR)/$(STACK)
 PRODUCER_RUNTIME_ARGS := --retry-max-attempts $(RETRY_MAX_ATTEMPTS) --retry-backoff-seconds $(RETRY_BACKOFF_SECONDS) --log-level $(LOG_LEVEL) --log-format $(LOG_FORMAT) $(if $(REQUEST_RATE_LIMIT_PER_SECOND),--request-rate-limit-per-second $(REQUEST_RATE_LIMIT_PER_SECOND),) $(if $(PUBLISH_RATE_LIMIT_PER_SECOND),--publish-rate-limit-per-second $(PUBLISH_RATE_LIMIT_PER_SECOND),)
 
-DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra
+DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra streaming-lake-infra
 ACTIVE_DEPLOY_ORDER := account-admin network-infra uc-metastore-infra workspace-infra
-DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
+DESTROY_ORDER := streaming-lake-infra workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
 ACTIVE_DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin
 
 help: ## Show available commands
@@ -97,17 +98,11 @@ kafka-export-vars: ## Show commands that export Kafka producer variables from Te
 		'. ./bin/set_aws_credentials.sh' \
 		'. ./bin/set_kafka_output_api_keys.sh'
 
-kafka-produce-sample: ## Fetch real France Eco2mix data and publish events to Kafka
-	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) $(PRODUCER_RUNTIME_ARGS)
-
-kafka-produce-sample-dry-run: ## Print offline sample France events without contacting Kafka
-	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --source sample --dry-run $(PRODUCER_RUNTIME_ARGS)
-
-kafka-produce-real-dry-run: ## Fetch real France Eco2mix data and print events without publishing
-	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --dry-run $(PRODUCER_RUNTIME_ARGS)
-
-kafka-produce-scheduled-dry-run: ## Run scheduled France Eco2mix dry-run for a bounded number of iterations
-	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --last-days $(LAST_DAYS) --dry-run --schedule-interval-seconds $(SCHEDULE_INTERVAL_SECONDS) --max-runs $(MAX_RUNS) $(PRODUCER_RUNTIME_ARGS)
+flink-export-vars: ## Show commands that export Flink Kafka and S3 variables from Terraform outputs
+	@printf '%s\n' \
+		'. ./bin/set_env_vars.sh' \
+		'. ./bin/set_aws_credentials.sh' \
+		'. ./bin/set_flink_output_vars.sh'
 
 kafka-producer-docker-build: ## Build the Docker image for the France Eco2mix producer
 	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) build france-eco2mix-producer
@@ -126,6 +121,18 @@ kafka-producer-docker-run: ## Fetch real last-days Eco2mix data and publish from
 
 producer-test: ## Run Python producer tests
 	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m pytest
+
+flink-docker-build: ## Build the Docker image for local PyFlink jobs
+	@docker compose -f $(ENERGY_FLINK_APP_DIR)/compose.yaml --project-directory $(ENERGY_FLINK_APP_DIR) build
+
+flink-bronze-dry-run-config: ## Validate local Flink bronze sink environment variables
+	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m jobs.raw_fr_energy_grid_to_s3 --dry-run-config
+
+flink-bronze-submit: ## Submit the raw France Kafka-to-S3 bronze PyFlink job to the local Flink cluster
+	@docker compose -f $(ENERGY_FLINK_APP_DIR)/compose.yaml --project-directory $(ENERGY_FLINK_APP_DIR) up job-submitter
+
+flink-test: ## Run Python Flink job tests
+	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m pytest
 
 plan-all: ## Run plan for all stacks in deployment order
 	@for stack in $(DEPLOY_ORDER); do \

@@ -1,8 +1,9 @@
 locals {
-  environment_display_name           = "${var.prefix}-confluent"
-  kafka_cluster_display_name         = "${var.prefix}-kafka"
-  producer_service_account_name      = "${var.prefix}-local-producer"
-  cluster_admin_service_account_name = "${var.prefix}-cluster-admin"
+  environment_display_name            = "${var.prefix}-confluent"
+  kafka_cluster_display_name          = "${var.prefix}-kafka"
+  producer_service_account_name       = "${var.prefix}-local-producer"
+  flink_consumer_service_account_name = "${var.prefix}-flink-consumer"
+  cluster_admin_service_account_name  = "${var.prefix}-cluster-admin"
 }
 
 resource "confluent_environment" "this" {
@@ -153,6 +154,112 @@ resource "confluent_kafka_acl" "producer_write_topic" {
   principal     = "User:${confluent_service_account.producer.id}"
   host          = "*"
   operation     = "WRITE"
+  permission    = "ALLOW"
+  rest_endpoint = confluent_kafka_cluster.this.rest_endpoint
+
+  credentials {
+    key    = confluent_api_key.cluster_admin.id
+    secret = confluent_api_key.cluster_admin.secret
+  }
+}
+
+resource "confluent_service_account" "flink_consumer" {
+  display_name = local.flink_consumer_service_account_name
+  description  = "Service account for local Flink jobs consuming from ${var.topic_name}."
+}
+
+resource "confluent_api_key" "flink_consumer" {
+  display_name = "${local.flink_consumer_service_account_name}-kafka-api-key"
+  description  = "Kafka API key for local Flink jobs consuming from ${var.topic_name}."
+
+  owner {
+    id          = confluent_service_account.flink_consumer.id
+    api_version = confluent_service_account.flink_consumer.api_version
+    kind        = confluent_service_account.flink_consumer.kind
+  }
+
+  managed_resource {
+    id          = confluent_kafka_cluster.this.id
+    api_version = confluent_kafka_cluster.this.api_version
+    kind        = confluent_kafka_cluster.this.kind
+
+    environment {
+      id = confluent_environment.this.id
+    }
+  }
+}
+
+resource "confluent_kafka_acl" "flink_consumer_describe_cluster" {
+  kafka_cluster {
+    id = confluent_kafka_cluster.this.id
+  }
+
+  resource_type = "CLUSTER"
+  resource_name = "kafka-cluster"
+  pattern_type  = "LITERAL"
+  principal     = "User:${confluent_service_account.flink_consumer.id}"
+  host          = "*"
+  operation     = "DESCRIBE"
+  permission    = "ALLOW"
+  rest_endpoint = confluent_kafka_cluster.this.rest_endpoint
+
+  credentials {
+    key    = confluent_api_key.cluster_admin.id
+    secret = confluent_api_key.cluster_admin.secret
+  }
+}
+
+resource "confluent_kafka_acl" "flink_consumer_describe_topic" {
+  kafka_cluster {
+    id = confluent_kafka_cluster.this.id
+  }
+
+  resource_type = "TOPIC"
+  resource_name = confluent_kafka_topic.producer_mvp.topic_name
+  pattern_type  = "LITERAL"
+  principal     = "User:${confluent_service_account.flink_consumer.id}"
+  host          = "*"
+  operation     = "DESCRIBE"
+  permission    = "ALLOW"
+  rest_endpoint = confluent_kafka_cluster.this.rest_endpoint
+
+  credentials {
+    key    = confluent_api_key.cluster_admin.id
+    secret = confluent_api_key.cluster_admin.secret
+  }
+}
+
+resource "confluent_kafka_acl" "flink_consumer_read_topic" {
+  kafka_cluster {
+    id = confluent_kafka_cluster.this.id
+  }
+
+  resource_type = "TOPIC"
+  resource_name = confluent_kafka_topic.producer_mvp.topic_name
+  pattern_type  = "LITERAL"
+  principal     = "User:${confluent_service_account.flink_consumer.id}"
+  host          = "*"
+  operation     = "READ"
+  permission    = "ALLOW"
+  rest_endpoint = confluent_kafka_cluster.this.rest_endpoint
+
+  credentials {
+    key    = confluent_api_key.cluster_admin.id
+    secret = confluent_api_key.cluster_admin.secret
+  }
+}
+
+resource "confluent_kafka_acl" "flink_consumer_read_group" {
+  kafka_cluster {
+    id = confluent_kafka_cluster.this.id
+  }
+
+  resource_type = "GROUP"
+  resource_name = var.flink_consumer_group_id
+  pattern_type  = "LITERAL"
+  principal     = "User:${confluent_service_account.flink_consumer.id}"
+  host          = "*"
+  operation     = "READ"
   permission    = "ALLOW"
   rest_endpoint = confluent_kafka_cluster.this.rest_endpoint
 

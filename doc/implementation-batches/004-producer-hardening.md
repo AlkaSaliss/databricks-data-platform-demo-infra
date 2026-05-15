@@ -2,7 +2,7 @@
 
 ## Goal
 
-Harden the France Eco2mix producer before expanding to more countries by adding controlled retries, structured logging, rate limiting, and a scheduled run mode. This batch improves operational reliability for local and Docker-based runs without changing the raw event contract or Kafka topic strategy.
+Harden the France Eco2mix producer before expanding to more countries by adding controlled retries, structured logging, rate limiting, and a scheduled run mode. As of batch 005, local demo execution is Docker-only while the Python package remains the container implementation and unit-test target.
 
 ## Delivery Strategy
 
@@ -18,9 +18,9 @@ The branch delivers retries, structured logging, rate limiting, and scheduled mo
 - Kafka wrapper under `apps/producers/energy_market/producers/common/kafka.py`
 - Producer tests under `apps/producers/energy_market/tests/test_france_rte_producer.py`
 - Root Make targets:
-  - `make kafka-produce-sample-dry-run`
-  - `make kafka-produce-real-dry-run`
+  - `make kafka-producer-docker-dry-run`
   - `make kafka-producer-docker-real-dry-run LAST_DAYS=1`
+  - `make kafka-producer-docker-scheduled-dry-run LAST_DAYS=1`
   - `make producer-test`
 
 ## Scope
@@ -61,7 +61,7 @@ Scheduled execution supports clean shutdown and preserves dry-run support for lo
 
 ## Local Setup
 
-Install the Python package with test dependencies:
+Install the Python package with test dependencies only when running unit tests directly:
 
 ```bash
 python3 -m pip install -e "./apps/producers/energy_market[test]"
@@ -86,20 +86,21 @@ make producer-test
 Validate dry-run behavior after hardening changes:
 
 ```bash
-make kafka-produce-sample-dry-run
-make kafka-produce-real-dry-run
-make kafka-produce-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=10 MAX_RUNS=2
+make kafka-producer-docker-dry-run
 make kafka-producer-docker-real-dry-run LAST_DAYS=1
 make kafka-producer-docker-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=10 MAX_RUNS=2
 ```
 
-Example direct CLI verification:
+The direct Python CLI remains an internal container entrypoint and a unit-test seam. Use the Docker Make targets for local demo runs.
+
+Container entrypoint equivalent:
 
 ```bash
-cd apps/producers/energy_market
-python3 -m producers.france_rte_producer \
-  --dry-run \
+docker compose -f apps/producers/energy_market/compose.yaml \
+  --project-directory apps/producers/energy_market \
+  run --rm france-eco2mix-producer \
   --last-days 1 \
+  --dry-run \
   --schedule-interval-seconds 10 \
   --max-runs 2 \
   --retry-max-attempts 3 \
@@ -114,7 +115,7 @@ python3 -m producers.france_rte_producer \
 - Runtime output is emitted as structured logs instead of only free-form print statements.
 - Historical replays can be throttled to a controlled request and publish pace.
 - Scheduled mode repeatedly executes the producer loop on a fixed interval until interrupted.
-- Existing one-shot dry-run and publish flows remain supported.
+- Docker one-shot dry-run and publish flows remain supported.
 
 ## Acceptance Criteria
 
@@ -122,7 +123,7 @@ python3 -m producers.france_rte_producer \
 - Existing tests still pass, with new focused tests added for retry, logging, rate limiting, and scheduling logic where useful.
 - The producer exits non-zero after exhausting retries.
 - Scheduled mode can be stopped cleanly without leaving a half-failed run state.
-- Local and Docker entrypoints continue to support the France producer workflow.
+- Docker entrypoints continue to support the France producer workflow.
 
 ## Follow-Up Batches
 

@@ -6,6 +6,7 @@ on:
       - ".github/workflows/producer-tests.yml"
       - "Makefile"
       - "apps/producers/**"
+      - "apps/flink/**"
       - "doc/implementation-batches/**"
   workflow_dispatch:
 
@@ -38,14 +39,6 @@ jobs:
         shell: bash
         run: make producer-test
 
-      - name: Run producer dry-run
-        shell: bash
-        run: make kafka-produce-sample-dry-run LOG_FORMAT=text
-
-      - name: Run scheduled producer dry-run
-        shell: bash
-        run: make kafka-produce-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=0.01 MAX_RUNS=2 LOG_FORMAT=text
-
       - name: Build producer Docker image
         shell: bash
         run: make kafka-producer-docker-build
@@ -57,3 +50,12 @@ jobs:
       - name: Run producer Docker scheduled dry-run
         shell: bash
         run: make kafka-producer-docker-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=0.01 MAX_RUNS=2 LOG_FORMAT=text
+
+      - name: Install Flink test dependencies
+        shell: bash
+        working-directory: apps/flink/energy_market
+        run: python -m pip install -e ".[test]"
+
+      - name: Run Flink job tests
+        shell: bash
+        run: make flink-test

@@ -36,10 +36,16 @@ KAFKA_TOPIC_VALUE="$(kafka_output topic_name)" || return 1
 KAFKA_API_KEY_VALUE="$(kafka_output producer_kafka_api_key)" || return 1
 KAFKA_API_SECRET_VALUE="$(kafka_output producer_kafka_api_secret)" || return 1
 
-export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS_VALUE}"
-export KAFKA_TOPIC="${KAFKA_TOPIC_VALUE}"
-export KAFKA_API_KEY="${KAFKA_API_KEY_VALUE}"
-export KAFKA_API_SECRET="${KAFKA_API_SECRET_VALUE}"
+export ENERGY_MARKET_KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS_VALUE}"
+export ENERGY_MARKET_KAFKA_TOPIC="${KAFKA_TOPIC_VALUE}"
+export ENERGY_MARKET_KAFKA_API_KEY="${KAFKA_API_KEY_VALUE}"
+export ENERGY_MARKET_KAFKA_API_SECRET="${KAFKA_API_SECRET_VALUE}"
+
+# Avoid colliding with Confluent Terraform provider environment variables.
+unset KAFKA_BOOTSTRAP_SERVERS
+unset KAFKA_TOPIC
+unset KAFKA_API_KEY
+unset KAFKA_API_SECRET
 
 unset KAFKA_BOOTSTRAP_SERVERS_VALUE
 unset KAFKA_TOPIC_VALUE

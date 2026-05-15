@@ -34,3 +34,25 @@ output "topic_name" {
   value       = confluent_kafka_topic.producer_mvp.topic_name
   description = "Kafka topic created for the first local producer."
 }
+
+output "flink_consumer_service_account_id" {
+  value       = confluent_service_account.flink_consumer.id
+  description = "Confluent service account ID used by local Flink consumers."
+}
+
+output "flink_consumer_kafka_api_key" {
+  value       = confluent_api_key.flink_consumer.id
+  description = "Kafka API key for local Flink consumers."
+  sensitive   = true
+}
+
+output "flink_consumer_kafka_api_secret" {
+  value       = confluent_api_key.flink_consumer.secret
+  description = "Kafka API secret for local Flink consumers."
+  sensitive   = true
+}
+
+output "flink_consumer_group_id" {
+  value       = var.flink_consumer_group_id
+  description = "Kafka consumer group ID used by the local Flink bronze sink."
+}

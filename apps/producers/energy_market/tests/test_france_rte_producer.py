@@ -56,6 +56,10 @@ def test_producer_config_fails_when_env_vars_are_missing(monkeypatch: pytest.Mon
         "KAFKA_TOPIC",
         "KAFKA_API_KEY",
         "KAFKA_API_SECRET",
+        "ENERGY_MARKET_KAFKA_BOOTSTRAP_SERVERS",
+        "ENERGY_MARKET_KAFKA_TOPIC",
+        "ENERGY_MARKET_KAFKA_API_KEY",
+        "ENERGY_MARKET_KAFKA_API_SECRET",
     ]:
         monkeypatch.delenv(name, raising=False)
 

@@ -5,17 +5,18 @@
 [![Confluent Kafka Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml)
 [![Producer Tests](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml)
 
-This repository contains Terraform modules and Terragrunt live stacks for deploying a Databricks data platform foundation on AWS.
+This repository contains Terraform modules, Terragrunt live stacks, Dockerized producers, and local PyFlink jobs for a Databricks data platform demo on AWS.
 
 ## Stack Overview
 
-The live deployment is split into five stacks under `src/live/<env>/<region>`:
+The active AWS/Databricks deployment is split into six stacks under `src/live/<env>/<region>`:
 
 1. `terraform-state-infra`
 2. `account-admin`
 3. `network-infra`
 4. `uc-metastore-infra`
 5. `workspace-infra`
+6. `streaming-lake-infra`
 
 Recommended deployment order is the same as the list above. Destroy order is the reverse.
 
@@ -30,9 +31,14 @@ Recommended deployment order is the same as the list above. Destroy order is the
 ├── doc/
 │   ├── account-admin.md
 │   ├── network-infra.md
+│   ├── streaming-lake-infra.md
 │   ├── terraform-state-infra.md
 │   ├── uc-metastore-infra.md
 │   └── workspace-infra.md
+└── src/
+├── apps/
+│   ├── flink/
+│   └── producers/
 └── src/
     ├── live/
     │   └── dev/
@@ -124,7 +130,7 @@ make plan STACK=confluent-kafka-infra
 make deploy STACK=confluent-kafka-infra
 ```
 
-The first implementation batch creates one producer MVP topic: `raw.fr.energy_grid`.
+The Kafka stack creates one producer MVP topic, `raw.fr.energy_grid`, plus producer credentials and Flink consumer credentials for local streaming demos.
 
 The Confluent Kafka GitHub workflow validates and plans this stack independently. Configure these GitHub secrets before using it:
 
@@ -137,30 +143,37 @@ Optional secret:
 
 - `AWS_SESSION_TOKEN`
 
-## Local Kafka Producers
+## Streaming Lake Infra
 
-Install producer dependencies:
+The `streaming-lake-infra` stack creates the dedicated S3 bucket used by local Flink jobs for bronze Parquet output.
 
 ```bash
-python3 -m pip install -e "./apps/producers/energy_market[test]"
+make plan STACK=streaming-lake-infra
+make deploy STACK=streaming-lake-infra
+```
+
+Its `raw_fr_energy_grid_bronze_uri` output is exported by `bin/set_flink_output_vars.sh` and used as `FLINK_S3_BRONZE_URI`.
+
+## Docker Kafka Producer
+
+Producer demo runs are Docker-only. The Python package remains the container entrypoint implementation and the unit-test target.
+
+Build the producer image:
+
+```bash
+make kafka-producer-docker-build
 ```
 
 Validate offline France sample event generation without contacting Kafka:
 
 ```bash
-make kafka-produce-sample-dry-run
+make kafka-producer-docker-dry-run
 ```
 
 Validate real Eco2mix API retrieval without publishing:
 
 ```bash
-make kafka-produce-real-dry-run
-```
-
-Run the hardened producer on a fixed schedule without publishing:
-
-```bash
-make kafka-produce-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=10 MAX_RUNS=2 LOG_FORMAT=text
+make kafka-producer-docker-real-dry-run LAST_DAYS=1
 ```
 
 Runtime hardening controls are available on the producer Make targets:
@@ -180,24 +193,63 @@ To publish real Eco2mix events to `raw.fr.energy_grid`, first export Kafka conne
 . ./bin/set_env_vars.sh
 . ./bin/set_aws_credentials.sh
 . ./bin/set_kafka_output_api_keys.sh
-make kafka-produce-sample
+make kafka-producer-docker-run LAST_DAYS=1
 ```
 
-Docker Compose packaging is available for the producer app:
+`bin/set_kafka_output_api_keys.sh` exports producer runtime variables as `ENERGY_MARKET_KAFKA_*` and unsets generic `KAFKA_*` variables so the Confluent Terraform provider does not mistake producer credentials for provider configuration.
+
+Run the hardened producer on a fixed schedule without publishing:
 
 ```bash
-make kafka-producer-docker-build
-make kafka-producer-docker-real-dry-run LAST_DAYS=1
 make kafka-producer-docker-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=10 MAX_RUNS=2 LOG_FORMAT=text
 ```
 
-To publish the last N days of measured Eco2mix records from Docker:
+Run producer unit tests directly when changing producer internals:
+
+```bash
+python3 -m pip install -e "./apps/producers/energy_market[test]"
+make producer-test
+```
+
+## Local PyFlink Bronze Sink
+
+After deploying `confluent-kafka-infra` and `streaming-lake-infra`, export Flink Kafka and S3 settings:
+
+```bash
+. ./bin/set_env_vars.sh
+. ./bin/set_aws_credentials.sh
+. ./bin/set_flink_output_vars.sh
+```
+
+Build the local Flink image and validate non-secret config:
+
+```bash
+make flink-docker-build
+make flink-bronze-dry-run-config
+```
+
+Submit the Kafka-to-S3 bronze sink job:
+
+```bash
+make flink-bronze-submit
+```
+
+In another shell with producer variables exported, publish events:
 
 ```bash
 . ./bin/set_env_vars.sh
 . ./bin/set_aws_credentials.sh
 . ./bin/set_kafka_output_api_keys.sh
-make kafka-producer-docker-run LAST_DAYS=2
+make kafka-producer-docker-run LAST_DAYS=1
+```
+
+The job writes raw France energy-grid bronze Parquet files under `FLINK_S3_BRONZE_URI`, partitioned by `country_code` and `event_date`.
+
+Run Flink job unit tests directly when changing job internals:
+
+```bash
+python3 -m pip install -e "./apps/flink/energy_market[test]"
+make flink-test
 ```
 
 ## GitHub Actions CI/CD
@@ -207,9 +259,10 @@ The repository uses these GitHub Actions workflows:
 - `.github/workflows/pr-infra.yml` runs validation and planning for the active AWS/Databricks stacks on pull requests.
 - `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
 - `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
-- `.github/workflows/producer-tests.yml` runs producer unit tests, one-shot and scheduled dry-runs, and Docker image validation without publishing to Kafka.
+- `.github/workflows/streaming-lake-infra.yml` runs independent S3 bronze bucket validation, planning, and manual deployment.
+- `.github/workflows/producer-tests.yml` runs producer unit tests, Docker producer dry-runs, Docker image validation, and Flink job unit tests without publishing to Kafka.
 
-Both workflows target the active stacks sequentially for `dev/eu-west-1`:
+The AWS/Databricks workflows target the active workspace stacks sequentially for `dev/eu-west-1`:
 
 1. `account-admin`
 2. `network-infra`
@@ -217,7 +270,9 @@ Both workflows target the active stacks sequentially for `dev/eu-west-1`:
 4. `workspace-infra`
 
 `terraform-state-infra` is intentionally excluded from CI/CD because it bootstraps the remote state bucket and lock table and is deployed once manually.
-Active destroys run in reverse order: `workspace-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
+Active workspace destroys run in reverse order: `workspace-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
+
+`streaming-lake-infra` is deployed by the separate Streaming Lake workflow because it only needs AWS credentials and should not depend on Databricks CI secrets.
 
 ### GitHub Variables And Secrets
 
@@ -281,11 +336,13 @@ Plan logs are uploaded as GitHub Actions artifacts.
 
 ### Manual Deployment
 
-From GitHub, open **Actions** > **Deploy Infrastructure** > **Run workflow**.
+From GitHub, open **Actions** > **Deploy Databricks Demo Workspace Infrastructure** > **Run workflow** for the workspace stacks.
 
 Use `action=plan` to run validation and planning only.
 Use `action=apply` to run validation and planning first, then wait for the `dev` Environment approval before applying the active stacks sequentially.
 Use `action=destroy` to run validation and planning first, then wait for the `dev` Environment approval before destroying the active stacks in reverse order.
+
+For the S3 bronze bucket, open **Actions** > **Streaming Lake Infrastructure** > **Run workflow** and choose `plan`, `apply`, or `destroy`.
 
 ## Stack Documentation
 
@@ -294,3 +351,4 @@ Use `action=destroy` to run validation and planning first, then wait for the `de
 - [network-infra](./doc/network-infra.md)
 - [uc-metastore-infra](./doc/uc-metastore-infra.md)
 - [workspace-infra](./doc/workspace-infra.md)
+- [streaming-lake-infra](./doc/streaming-lake-infra.md)

@@ -22,10 +22,12 @@ class KafkaProducerConfig:
     @classmethod
     def from_env(cls) -> "KafkaProducerConfig":
         required_vars = {
-            "KAFKA_BOOTSTRAP_SERVERS": os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
-            "KAFKA_TOPIC": os.getenv("KAFKA_TOPIC"),
-            "KAFKA_API_KEY": os.getenv("KAFKA_API_KEY"),
-            "KAFKA_API_SECRET": os.getenv("KAFKA_API_SECRET"),
+            "ENERGY_MARKET_KAFKA_BOOTSTRAP_SERVERS": os.getenv("ENERGY_MARKET_KAFKA_BOOTSTRAP_SERVERS")
+            or os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
+            "ENERGY_MARKET_KAFKA_TOPIC": os.getenv("ENERGY_MARKET_KAFKA_TOPIC") or os.getenv("KAFKA_TOPIC"),
+            "ENERGY_MARKET_KAFKA_API_KEY": os.getenv("ENERGY_MARKET_KAFKA_API_KEY") or os.getenv("KAFKA_API_KEY"),
+            "ENERGY_MARKET_KAFKA_API_SECRET": os.getenv("ENERGY_MARKET_KAFKA_API_SECRET")
+            or os.getenv("KAFKA_API_SECRET"),
         }
         missing = [name for name, value in required_vars.items() if not value]
         if missing:
@@ -36,10 +38,10 @@ class KafkaProducerConfig:
             )
 
         return cls(
-            bootstrap_servers=required_vars["KAFKA_BOOTSTRAP_SERVERS"] or "",
-            topic=required_vars["KAFKA_TOPIC"] or "",
-            api_key=required_vars["KAFKA_API_KEY"] or "",
-            api_secret=required_vars["KAFKA_API_SECRET"] or "",
+            bootstrap_servers=required_vars["ENERGY_MARKET_KAFKA_BOOTSTRAP_SERVERS"] or "",
+            topic=required_vars["ENERGY_MARKET_KAFKA_TOPIC"] or "",
+            api_key=required_vars["ENERGY_MARKET_KAFKA_API_KEY"] or "",
+            api_secret=required_vars["ENERGY_MARKET_KAFKA_API_SECRET"] or "",
         )
 
 

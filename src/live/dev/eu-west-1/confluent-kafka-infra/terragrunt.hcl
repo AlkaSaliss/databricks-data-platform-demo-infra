@@ -25,4 +25,5 @@ inputs = {
   topic_name                 = "raw.fr.energy_grid"
   topic_partitions_count     = 1
   topic_retention_ms         = "604800000"
+  flink_consumer_group_id    = "energy-market-flink-bronze"
 }
