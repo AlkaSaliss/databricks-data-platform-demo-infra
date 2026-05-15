@@ -3,6 +3,7 @@ services:
     build:
       context: .
     image: energy-market-pyflink:local
+    platform: linux/amd64
     command: jobmanager
     ports:
       - "8081:8081"
@@ -16,6 +17,7 @@ services:
 
   taskmanager:
     image: energy-market-pyflink:local
+    platform: linux/amd64
     command: taskmanager
     depends_on:
       - jobmanager
@@ -29,6 +31,7 @@ services:
 
   job-submitter:
     image: energy-market-pyflink:local
+    platform: linux/amd64
     depends_on:
       - jobmanager
       - taskmanager
