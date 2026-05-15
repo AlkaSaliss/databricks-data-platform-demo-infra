@@ -40,7 +40,11 @@ jobs:
 
       - name: Run producer dry-run
         shell: bash
-        run: make kafka-produce-sample-dry-run
+        run: make kafka-produce-sample-dry-run LOG_FORMAT=text
+
+      - name: Run scheduled producer dry-run
+        shell: bash
+        run: make kafka-produce-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=0.01 MAX_RUNS=2 LOG_FORMAT=text
 
       - name: Build producer Docker image
         shell: bash
@@ -48,4 +52,8 @@ jobs:
 
       - name: Run producer Docker dry-run
         shell: bash
-        run: make kafka-producer-docker-dry-run
+        run: make kafka-producer-docker-dry-run LOG_FORMAT=text
+
+      - name: Run producer Docker scheduled dry-run
+        shell: bash
+        run: make kafka-producer-docker-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=0.01 MAX_RUNS=2 LOG_FORMAT=text

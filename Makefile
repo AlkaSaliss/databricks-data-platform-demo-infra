@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars kafka-produce-sample kafka-produce-sample-dry-run kafka-produce-real-dry-run kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-run producer-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars kafka-produce-sample kafka-produce-sample-dry-run kafka-produce-real-dry-run kafka-produce-scheduled-dry-run kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run producer-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -8,11 +8,20 @@ STACK ?= account-admin
 COUNT ?= 3
 LAST_DAYS ?= 1
 PYTHON ?= python3
+RETRY_MAX_ATTEMPTS ?= 3
+RETRY_BACKOFF_SECONDS ?= 1
+REQUEST_RATE_LIMIT_PER_SECOND ?=
+PUBLISH_RATE_LIMIT_PER_SECOND ?=
+SCHEDULE_INTERVAL_SECONDS ?= 60
+MAX_RUNS ?= 2
+LOG_LEVEL ?= INFO
+LOG_FORMAT ?= json
 
 SRC_DIR := src
 ENERGY_PRODUCER_APP_DIR := apps/producers/energy_market
 LIVE_DIR := $(SRC_DIR)/live/$(ENV)/$(REGION)
 STACK_DIR := $(LIVE_DIR)/$(STACK)
+PRODUCER_RUNTIME_ARGS := --retry-max-attempts $(RETRY_MAX_ATTEMPTS) --retry-backoff-seconds $(RETRY_BACKOFF_SECONDS) --log-level $(LOG_LEVEL) --log-format $(LOG_FORMAT) $(if $(REQUEST_RATE_LIMIT_PER_SECOND),--request-rate-limit-per-second $(REQUEST_RATE_LIMIT_PER_SECOND),) $(if $(PUBLISH_RATE_LIMIT_PER_SECOND),--publish-rate-limit-per-second $(PUBLISH_RATE_LIMIT_PER_SECOND),)
 
 DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra
 ACTIVE_DEPLOY_ORDER := account-admin network-infra uc-metastore-infra workspace-infra
@@ -89,25 +98,31 @@ kafka-export-vars: ## Show commands that export Kafka producer variables from Te
 		'. ./bin/set_kafka_output_api_keys.sh'
 
 kafka-produce-sample: ## Fetch real France Eco2mix data and publish events to Kafka
-	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT)
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) $(PRODUCER_RUNTIME_ARGS)
 
 kafka-produce-sample-dry-run: ## Print offline sample France events without contacting Kafka
-	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --source sample --dry-run
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --source sample --dry-run $(PRODUCER_RUNTIME_ARGS)
 
 kafka-produce-real-dry-run: ## Fetch real France Eco2mix data and print events without publishing
-	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --dry-run
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --count $(COUNT) --dry-run $(PRODUCER_RUNTIME_ARGS)
+
+kafka-produce-scheduled-dry-run: ## Run scheduled France Eco2mix dry-run for a bounded number of iterations
+	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m producers.france_rte_producer --last-days $(LAST_DAYS) --dry-run --schedule-interval-seconds $(SCHEDULE_INTERVAL_SECONDS) --max-runs $(MAX_RUNS) $(PRODUCER_RUNTIME_ARGS)
 
 kafka-producer-docker-build: ## Build the Docker image for the France Eco2mix producer
 	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) build france-eco2mix-producer
 
 kafka-producer-docker-dry-run: ## Run offline sample producer dry-run in Docker
-	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --count $(COUNT) --source sample --dry-run
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --count $(COUNT) --source sample --dry-run $(PRODUCER_RUNTIME_ARGS)
 
 kafka-producer-docker-real-dry-run: ## Run real last-days Eco2mix producer dry-run in Docker
-	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS) --dry-run
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS) --dry-run $(PRODUCER_RUNTIME_ARGS)
+
+kafka-producer-docker-scheduled-dry-run: ## Run scheduled last-days Eco2mix dry-run in Docker
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS) --dry-run --schedule-interval-seconds $(SCHEDULE_INTERVAL_SECONDS) --max-runs $(MAX_RUNS) $(PRODUCER_RUNTIME_ARGS)
 
 kafka-producer-docker-run: ## Fetch real last-days Eco2mix data and publish from Docker
-	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS)
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS) $(PRODUCER_RUNTIME_ARGS)
 
 producer-test: ## Run Python producer tests
 	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m pytest

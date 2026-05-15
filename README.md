@@ -157,6 +157,23 @@ Validate real Eco2mix API retrieval without publishing:
 make kafka-produce-real-dry-run
 ```
 
+Run the hardened producer on a fixed schedule without publishing:
+
+```bash
+make kafka-produce-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=10 MAX_RUNS=2 LOG_FORMAT=text
+```
+
+Runtime hardening controls are available on the producer Make targets:
+
+- `RETRY_MAX_ATTEMPTS`
+- `RETRY_BACKOFF_SECONDS`
+- `REQUEST_RATE_LIMIT_PER_SECOND`
+- `PUBLISH_RATE_LIMIT_PER_SECOND`
+- `SCHEDULE_INTERVAL_SECONDS`
+- `MAX_RUNS`
+- `LOG_LEVEL`
+- `LOG_FORMAT`
+
 To publish real Eco2mix events to `raw.fr.energy_grid`, first export Kafka connection settings from the Confluent Terraform outputs:
 
 ```bash
@@ -171,6 +188,7 @@ Docker Compose packaging is available for the producer app:
 ```bash
 make kafka-producer-docker-build
 make kafka-producer-docker-real-dry-run LAST_DAYS=1
+make kafka-producer-docker-scheduled-dry-run LAST_DAYS=1 SCHEDULE_INTERVAL_SECONDS=10 MAX_RUNS=2 LOG_FORMAT=text
 ```
 
 To publish the last N days of measured Eco2mix records from Docker:
@@ -189,7 +207,7 @@ The repository uses these GitHub Actions workflows:
 - `.github/workflows/pr-infra.yml` runs validation and planning for the active AWS/Databricks stacks on pull requests.
 - `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
 - `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
-- `.github/workflows/producer-tests.yml` runs producer unit tests, sample dry-runs, and Docker image validation without publishing to Kafka.
+- `.github/workflows/producer-tests.yml` runs producer unit tests, one-shot and scheduled dry-runs, and Docker image validation without publishing to Kafka.
 
 Both workflows target the active stacks sequentially for `dev/eu-west-1`:
 
