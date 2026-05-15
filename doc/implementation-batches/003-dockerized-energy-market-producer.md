@@ -29,6 +29,13 @@ Before publishing to Kafka, source the local configuration and retrieve producer
 
 Docker Compose reads these values from the caller environment:
 
+- `ENERGY_MARKET_KAFKA_BOOTSTRAP_SERVERS`
+- `ENERGY_MARKET_KAFKA_TOPIC`
+- `ENERGY_MARKET_KAFKA_API_KEY`
+- `ENERGY_MARKET_KAFKA_API_SECRET`
+
+The Compose file still accepts these legacy fallback names, but avoid exporting them in shells used for Terraform because the Confluent provider also reads them:
+
 - `KAFKA_BOOTSTRAP_SERVERS`
 - `KAFKA_TOPIC`
 - `KAFKA_API_KEY`

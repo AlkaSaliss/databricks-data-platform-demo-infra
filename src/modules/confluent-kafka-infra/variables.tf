@@ -76,3 +76,14 @@ variable "topic_retention_ms" {
   description = "(Optional) Kafka topic retention in milliseconds."
   default     = "604800000"
 }
+
+variable "flink_consumer_group_id" {
+  type        = string
+  description = "(Optional) Kafka consumer group ID used by the local Flink bronze sink."
+  default     = "energy-market-flink-bronze"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._-]+$", var.flink_consumer_group_id))
+    error_message = "Flink consumer group ID may contain only letters, numbers, dots, underscores, and hyphens."
+  }
+}

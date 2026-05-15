@@ -398,7 +398,7 @@ def main() -> int:
         producer="france_rte_producer",
         source_system="rte_eco2mix",
         mode="dry-run" if args.dry_run else "publish",
-        topic=os.getenv("KAFKA_TOPIC", ""),
+        topic=os.getenv("ENERGY_MARKET_KAFKA_TOPIC", os.getenv("KAFKA_TOPIC", "")),
     )
 
     try:
