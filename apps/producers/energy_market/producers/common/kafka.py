@@ -43,6 +43,13 @@ class KafkaProducerConfig:
         )
 
 
+@dataclass(frozen=True)
+class KafkaDeliveryResult:
+    topic: str
+    partition: int
+    offset: int
+
+
 class ConfluentKafkaEventProducer:
     def __init__(self, config: KafkaProducerConfig) -> None:
         try:
@@ -54,7 +61,8 @@ class ConfluentKafkaEventProducer:
             ) from exc
 
         self._topic = config.topic
-        self._delivery_errors: list[Any] = []
+        self._delivery_error: Any | None = None
+        self._delivery_result: KafkaDeliveryResult | None = None
         self._producer = Producer(
             {
                 "bootstrap.servers": config.bootstrap_servers,
@@ -66,9 +74,11 @@ class ConfluentKafkaEventProducer:
             }
         )
 
-    def publish(self, event: Mapping[str, Any]) -> None:
+    def publish(self, event: Mapping[str, Any]) -> KafkaDeliveryResult:
         event_id = str(event["event_id"])
         payload = json.dumps(event, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        self._delivery_error = None
+        self._delivery_result = None
         self._producer.produce(
             self._topic,
             key=event_id.encode("utf-8"),
@@ -76,21 +86,27 @@ class ConfluentKafkaEventProducer:
             on_delivery=self._delivery_report,
         )
         self._producer.poll(0)
+        remaining = self._producer.flush(timeout=30)
+        if remaining:
+            raise RuntimeError(f"Timed out before {remaining} Kafka message(s) were delivered.")
+        if self._delivery_error is not None:
+            raise RuntimeError(f"Kafka delivery failed: {self._delivery_error}")
+        if self._delivery_result is None:
+            raise RuntimeError("Kafka publish completed without a delivery result.")
+        return self._delivery_result
 
     def flush(self) -> None:
         remaining = self._producer.flush(timeout=30)
         if remaining:
             raise RuntimeError(f"Timed out before {remaining} Kafka message(s) were delivered.")
-        if self._delivery_errors:
-            errors = "; ".join(str(error) for error in self._delivery_errors)
-            raise RuntimeError(f"Kafka delivery failed: {errors}")
 
     def _delivery_report(self, error: Any, message: Any) -> None:
         if error is not None:
-            self._delivery_errors.append(error)
+            self._delivery_error = error
             return
 
-        print(
-            "Published event to "
-            f"{message.topic()}[{message.partition()}] at offset {message.offset()}"
+        self._delivery_result = KafkaDeliveryResult(
+            topic=message.topic(),
+            partition=message.partition(),
+            offset=message.offset(),
         )

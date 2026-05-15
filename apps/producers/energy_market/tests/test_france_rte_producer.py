@@ -4,13 +4,17 @@ from datetime import UTC, datetime
 
 import pytest
 
-from producers.common.kafka import KafkaConfigError, KafkaProducerConfig
+from producers.common.kafka import KafkaConfigError, KafkaDeliveryResult, KafkaProducerConfig
+from producers.common.logging import bind_logger, configure_logging
+from producers.common.runtime import RetryPolicy
 from producers.france_rte_producer import (
     build_last_days_where_clause,
     eco2mix_record_to_raw_event,
     fetch_france_rte_events,
     fetch_france_rte_events_for_last_days,
     generate_sample_france_rte_events,
+    publish_events,
+    run_scheduled_mode,
 )
 
 
@@ -165,3 +169,98 @@ def test_latest_count_fetch_maps_api_records(monkeypatch: pytest.MonkeyPatch) ->
 
     assert events[0]["event_id"] == "fr-rte-20260514T120000-consumption"
     assert events[0]["payload"]["metric_value"] == 42000
+
+
+def test_fetch_retries_transient_api_errors() -> None:
+    attempts = {"count": 0}
+
+    def flaky_fetch(where: str, limit: int, offset: int) -> list[dict[str, object]]:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("temporary api failure")
+        return [
+            {
+                "date_heure": "2026-05-14T12:00:00+00:00",
+                "consommation": 42000,
+            }
+        ]
+
+    logger = bind_logger(
+        configure_logging(
+            logger_name="tests.fetch_retry",
+            level="INFO",
+            log_format="text",
+        )
+    )
+
+    events = fetch_france_rte_events(
+        1,
+        retry_policy=RetryPolicy(max_attempts=2, backoff_seconds=0),
+        fetch_page=flaky_fetch,
+        logger=logger,
+    )
+
+    assert attempts["count"] == 2
+    assert events[0]["payload"]["metric_value"] == 42000
+
+
+def test_publish_events_retries_failed_delivery() -> None:
+    class FakeProducer:
+        def __init__(self, config: KafkaProducerConfig) -> None:
+            self.calls = 0
+
+        def publish(self, event: dict[str, object]) -> KafkaDeliveryResult:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("broker unavailable")
+            return KafkaDeliveryResult(topic="raw.fr.energy_grid", partition=2, offset=9)
+
+        def flush(self) -> None:
+            return None
+
+    logger = bind_logger(
+        configure_logging(
+            logger_name="tests.publish_retry",
+            level="INFO",
+            log_format="text",
+        )
+    )
+
+    published = publish_events(
+        [generate_sample_france_rte_events(1)[0]],
+        config=KafkaProducerConfig(
+            bootstrap_servers="localhost:9092",
+            topic="raw.fr.energy_grid",
+            api_key="key",
+            api_secret="secret",
+        ),
+        retry_policy=RetryPolicy(max_attempts=2, backoff_seconds=0),
+        logger=logger,
+        producer_factory=FakeProducer,
+    )
+
+    assert published == 1
+
+
+def test_scheduled_mode_runs_until_max_runs() -> None:
+    calls: list[str] = []
+    sleeps: list[float] = []
+    logger = bind_logger(
+        configure_logging(
+            logger_name="tests.schedule",
+            level="INFO",
+            log_format="text",
+        )
+    )
+
+    completed_runs = run_scheduled_mode(
+        interval_seconds=5.0,
+        max_runs=3,
+        run_once=lambda: calls.append("run") or 1,
+        logger=logger,
+        sleeper=sleeps.append,
+    )
+
+    assert completed_runs == 3
+    assert calls == ["run", "run", "run"]
+    assert sleeps == [5.0, 5.0]
