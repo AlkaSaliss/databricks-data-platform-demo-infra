@@ -98,7 +98,7 @@ CREATE TABLE raw_fr_energy_grid_kafka (
   'properties.group.id' = '{_sql(config.kafka_group_id)}',
   'properties.security.protocol' = 'SASL_SSL',
   'properties.sasl.mechanism' = 'PLAIN',
-  'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="{_sql(config.kafka_api_key)}" password="{_sql(config.kafka_api_secret)}";',
+  'properties.sasl.jaas.config' = 'org.apache.flink.kafka.shaded.org.apache.kafka.common.security.plain.PlainLoginModule required username="{_sql(config.kafka_api_key)}" password="{_sql(config.kafka_api_secret)}";',
   'scan.startup.mode' = 'earliest-offset',
   'format' = 'raw'
 )
