@@ -30,6 +30,8 @@ Export producer and Flink runtime variables:
 . ./bin/set_flink_output_vars.sh
 ```
 
+`make flink-export-vars` only prints the source commands. Run the printed commands in the current shell before using `make flink-bronze-dry-run-config` or `make flink-bronze-submit`.
+
 The Flink helper exports:
 
 - `FLINK_KAFKA_BOOTSTRAP_SERVERS`

@@ -98,8 +98,9 @@ kafka-export-vars: ## Show commands that export Kafka producer variables from Te
 		'. ./bin/set_aws_credentials.sh' \
 		'. ./bin/set_kafka_output_api_keys.sh'
 
-flink-export-vars: ## Show commands that export Flink Kafka and S3 variables from Terraform outputs
+flink-export-vars: ## Print source commands for Flink Kafka and S3 variables
 	@printf '%s\n' \
+		'# Run these commands in your current shell. This target only prints them.' \
 		'. ./bin/set_env_vars.sh' \
 		'. ./bin/set_aws_credentials.sh' \
 		'. ./bin/set_flink_output_vars.sh'
@@ -126,6 +127,11 @@ flink-docker-build: ## Build the Docker image for local PyFlink jobs
 	@docker compose -f $(ENERGY_FLINK_APP_DIR)/compose.yaml --project-directory $(ENERGY_FLINK_APP_DIR) build
 
 flink-bronze-dry-run-config: ## Validate local Flink bronze sink environment variables
+	@test -n "$$FLINK_KAFKA_BOOTSTRAP_SERVERS" || (echo "Missing FLINK_KAFKA_BOOTSTRAP_SERVERS. Run: . ./bin/set_flink_output_vars.sh" >&2; exit 1)
+	@test -n "$$FLINK_KAFKA_TOPIC" || (echo "Missing FLINK_KAFKA_TOPIC. Run: . ./bin/set_flink_output_vars.sh" >&2; exit 1)
+	@test -n "$$FLINK_KAFKA_API_KEY" || (echo "Missing FLINK_KAFKA_API_KEY. Run: . ./bin/set_flink_output_vars.sh" >&2; exit 1)
+	@test -n "$$FLINK_KAFKA_API_SECRET" || (echo "Missing FLINK_KAFKA_API_SECRET. Run: . ./bin/set_flink_output_vars.sh" >&2; exit 1)
+	@test -n "$$FLINK_S3_BRONZE_URI" || (echo "Missing FLINK_S3_BRONZE_URI. Run: . ./bin/set_flink_output_vars.sh" >&2; exit 1)
 	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m jobs.raw_fr_energy_grid_to_s3 --dry-run-config
 
 flink-bronze-submit: ## Submit the raw France Kafka-to-S3 bronze PyFlink job to the local Flink cluster

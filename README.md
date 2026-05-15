@@ -221,6 +221,8 @@ After deploying `confluent-kafka-infra` and `streaming-lake-infra`, export Flink
 . ./bin/set_flink_output_vars.sh
 ```
 
+`make flink-export-vars` prints these commands for convenience, but it cannot source variables into your current shell.
+
 Build the local Flink image and validate non-secret config:
 
 ```bash
