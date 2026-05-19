@@ -58,7 +58,7 @@ provider "aws" {
   }
 }
 
-${contains(["terraform-state-infra", "network-infra", "streaming-lake-infra"], local.component) ? "" : <<EOT
+${contains(["terraform-state-infra", "network-infra", "streaming-lake-infra", "managed-flink-infra"], local.component) ? "" : <<EOT
 provider "databricks" {
   alias      = "mws"
   host       = "https://accounts.cloud.databricks.com"
