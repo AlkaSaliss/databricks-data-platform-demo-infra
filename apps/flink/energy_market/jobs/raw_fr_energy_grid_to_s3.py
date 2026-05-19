@@ -179,7 +179,7 @@ FROM raw_fr_energy_grid_kafka
 """.strip()
 
 
-def run_job(config: BronzeSinkConfig) -> None:
+def run_job(config: BronzeSinkConfig, wait_for_completion: bool) -> None:
     from pyflink.datastream import StreamExecutionEnvironment
     from pyflink.table import EnvironmentSettings, StreamTableEnvironment
 
@@ -191,7 +191,9 @@ def run_job(config: BronzeSinkConfig) -> None:
 
     table_env.execute_sql(kafka_source_ddl(config))
     table_env.execute_sql(bronze_sink_ddl(config))
-    table_env.execute_sql(insert_sql()).wait()
+    table_result = table_env.execute_sql(insert_sql())
+    if wait_for_completion:
+        table_result.wait()
 
 
 def main() -> int:
@@ -214,7 +216,7 @@ def main() -> int:
         )
         return 0
 
-    run_job(config)
+    run_job(config, wait_for_completion=should_wait_for_insert())
     return 0
 
 
@@ -227,6 +229,10 @@ def _require_text(event: Mapping[str, Any], field_name: str) -> str:
 
 def _sql(value: str) -> str:
     return value.replace("'", "''")
+
+
+def should_wait_for_insert() -> bool:
+    return bool(os.getenv("IS_LOCAL")) or not MANAGED_FLINK_PROPERTIES_PATH.exists()
 
 
 def _load_managed_flink_property_group(path: Path, group_id: str) -> Mapping[str, str]:

@@ -15,6 +15,7 @@ from jobs.raw_fr_energy_grid_to_s3 import (
     kafka_source_ddl,
     normalize_bootstrap_servers,
     parse_bronze_field,
+    should_wait_for_insert,
 )
 
 
@@ -120,6 +121,42 @@ def test_managed_flink_config_reports_missing_properties(tmp_path: Path) -> None
 
     with pytest.raises(FlinkConfigError, match="Missing Managed Flink properties"):
         BronzeSinkConfig.from_managed_flink_properties(properties_path)
+
+
+def test_managed_flink_runtime_does_not_wait_for_streaming_insert(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    properties_path = tmp_path / "application_properties.json"
+    properties_path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(
+        "jobs.raw_fr_energy_grid_to_s3.MANAGED_FLINK_PROPERTIES_PATH", properties_path
+    )
+    monkeypatch.delenv("IS_LOCAL", raising=False)
+
+    assert should_wait_for_insert() is False
+
+
+def test_local_runtime_waits_for_streaming_insert(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "jobs.raw_fr_energy_grid_to_s3.MANAGED_FLINK_PROPERTIES_PATH",
+        Path("/tmp/energy-market-missing-application-properties.json"),
+    )
+    monkeypatch.delenv("IS_LOCAL", raising=False)
+
+    assert should_wait_for_insert() is True
+
+
+def test_local_override_waits_even_with_application_properties(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    properties_path = tmp_path / "application_properties.json"
+    properties_path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(
+        "jobs.raw_fr_energy_grid_to_s3.MANAGED_FLINK_PROPERTIES_PATH", properties_path
+    )
+    monkeypatch.setenv("IS_LOCAL", "true")
+
+    assert should_wait_for_insert() is True
 
 
 def test_config_strips_confluent_bootstrap_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
