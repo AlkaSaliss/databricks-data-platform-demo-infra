@@ -8,6 +8,7 @@ import pytest
 from jobs.raw_fr_energy_grid_to_s3 import (
     BronzeSinkConfig,
     FlinkConfigError,
+    _managed_flink_property_group_summary,
     bronze_record_from_event,
     bronze_sink_ddl,
     event_date_from_source_time,
@@ -121,6 +122,37 @@ def test_managed_flink_config_reports_missing_properties(tmp_path: Path) -> None
 
     with pytest.raises(FlinkConfigError, match="Missing Managed Flink properties"):
         BronzeSinkConfig.from_managed_flink_properties(properties_path)
+
+
+def test_managed_flink_property_group_summary_does_not_expose_values(tmp_path: Path) -> None:
+    properties_path = tmp_path / "application_properties.json"
+    properties_path.write_text(
+        json.dumps(
+            [
+                {
+                    "PropertyGroupId": "bronze-sink-config",
+                    "PropertyMap": {
+                        "kafka_api_key": "managed-key",
+                        "kafka_api_secret": "managed-secret",
+                        "kafka_topic": "raw.fr.energy_grid",
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    summary = _managed_flink_property_group_summary(properties_path)
+    rendered = json.dumps(summary, sort_keys=True)
+
+    assert summary == [
+        {
+            "property_group_id": "bronze-sink-config",
+            "keys": ["kafka_api_key", "kafka_api_secret", "kafka_topic"],
+        }
+    ]
+    assert "managed-key" not in rendered
+    assert "managed-secret" not in rendered
 
 
 def test_managed_flink_runtime_does_not_wait_for_streaming_insert(

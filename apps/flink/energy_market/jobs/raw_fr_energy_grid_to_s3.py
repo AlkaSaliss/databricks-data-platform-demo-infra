@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+import traceback
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -201,6 +203,7 @@ def main() -> int:
     parser.add_argument("--dry-run-config", action="store_true", help="Validate and print non-secret job config.")
     args = parser.parse_args()
 
+    print_startup_diagnostics()
     config = BronzeSinkConfig.from_runtime()
     if args.dry_run_config:
         print(
@@ -218,6 +221,29 @@ def main() -> int:
 
     run_job(config, wait_for_completion=should_wait_for_insert())
     return 0
+
+
+def entrypoint() -> int:
+    try:
+        return main()
+    except Exception:
+        print("Managed Flink job failed during Python startup or submission.", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        sys.stdout.flush()
+        raise
+
+
+def print_startup_diagnostics() -> None:
+    diagnostics = {
+        "cwd": os.getcwd(),
+        "managed_flink_properties_path": str(MANAGED_FLINK_PROPERTIES_PATH),
+        "managed_flink_properties_exists": MANAGED_FLINK_PROPERTIES_PATH.exists(),
+        "python_executable": sys.executable,
+        "python_version": sys.version.split()[0],
+        "property_groups": _managed_flink_property_group_summary(MANAGED_FLINK_PROPERTIES_PATH),
+    }
+    print(f"Managed Flink startup diagnostics: {json.dumps(diagnostics, sort_keys=True)}", flush=True)
 
 
 def _require_text(event: Mapping[str, Any], field_name: str) -> str:
@@ -264,5 +290,45 @@ def _text_property_map(property_map: Mapping[str, Any]) -> dict[str, str]:
     return {key: value for key, value in property_map.items() if isinstance(key, str) and isinstance(value, str)}
 
 
+def _managed_flink_property_group_summary(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+
+    try:
+        with path.open(encoding="utf-8") as file:
+            document = json.load(file)
+    except Exception as exc:
+        return [{"error": f"{type(exc).__name__}: {exc}"}]
+
+    groups: list[dict[str, Any]] = []
+    if isinstance(document, list):
+        for item in document:
+            if isinstance(item, Mapping):
+                groups.append(_summarize_property_group(item))
+    elif isinstance(document, Mapping):
+        property_groups = document.get("PropertyGroups")
+        if isinstance(property_groups, list):
+            for item in property_groups:
+                if isinstance(item, Mapping):
+                    groups.append(_summarize_property_group(item))
+        else:
+            for group_id, property_map in document.items():
+                if isinstance(group_id, str) and isinstance(property_map, Mapping):
+                    groups.append(
+                        {
+                            "property_group_id": group_id,
+                            "keys": sorted(str(key) for key in property_map if isinstance(key, str)),
+                        }
+                    )
+
+    return groups
+
+
+def _summarize_property_group(item: Mapping[str, Any]) -> dict[str, Any]:
+    property_map = item.get("PropertyMap")
+    keys = sorted(str(key) for key in property_map if isinstance(key, str)) if isinstance(property_map, Mapping) else []
+    return {"property_group_id": item.get("PropertyGroupId"), "keys": keys}
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(entrypoint())

@@ -184,7 +184,7 @@ resource "aws_kinesisanalyticsv2_application" "bronze" {
 
         property_map = {
           jarfile = "lib/pyflink-dependencies.jar"
-          python  = "jobs/raw_fr_energy_grid_to_s3.py"
+          python  = "raw_fr_energy_grid_to_s3.py"
         }
       }
 
