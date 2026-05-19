@@ -47,6 +47,7 @@ build_dependency_jar_from_downloads() {
   done
 
   rm -f "${unpack_dir}/META-INF/"*.SF "${unpack_dir}/META-INF/"*.DSA "${unpack_dir}/META-INF/"*.RSA
+  rm -rf "${unpack_dir}/org/apache/commons/cli"
   (
     cd "${unpack_dir}"
     jar cf "${dependency_dir}/target/pyflink-dependencies.jar" .
@@ -57,10 +58,10 @@ build_dependency_jar_from_downloads() {
 
 mkdir -p "${dependency_dir}/target"
 
-if command -v mvn >/dev/null 2>&1; then
-  mvn -q -f "${dependency_dir}/pom.xml" package
-elif build_dependency_jar_from_downloads; then
+if build_dependency_jar_from_downloads; then
   true
+elif command -v mvn >/dev/null 2>&1; then
+  mvn -q -f "${dependency_dir}/pom.xml" package
 elif command -v docker >/dev/null 2>&1; then
   docker run --rm \
     -v "${repo_root}:/workspace" \
@@ -73,6 +74,11 @@ else
 fi
 
 test -s "${dependency_dir}/target/pyflink-dependencies.jar"
+
+if jar tf "${dependency_dir}/target/pyflink-dependencies.jar" | grep -q '^org/apache/commons/cli/'; then
+  echo "Error: dependency jar contains org.apache.commons.cli classes that conflict with the Managed Flink Python driver." >&2
+  exit 1
+fi
 
 rm -rf "${stage_dir}"
 mkdir -p "${stage_dir}/jobs" "${stage_dir}/lib"
