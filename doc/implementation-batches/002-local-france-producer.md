@@ -68,6 +68,18 @@ Publish recent real Eco2mix events:
 make kafka-producer-docker-run LAST_DAYS=1
 ```
 
+Validate historical consolidated Eco2mix backfill without publishing:
+
+```bash
+make kafka-producer-docker-backfill-dry-run BACKFILL_START_DATE=2024-01-01 BACKFILL_END_DATE=2024-01-31
+```
+
+Publish historical consolidated Eco2mix records:
+
+```bash
+make kafka-producer-docker-backfill-run BACKFILL_START_DATE=2024-01-01 BACKFILL_END_DATE=2024-01-31
+```
+
 Run producer tests:
 
 ```bash
@@ -76,7 +88,7 @@ make producer-test
 
 ## Expected Behavior
 
-Offline Docker dry-run prints sample raw event-envelope JSON to stdout and does not contact Kafka or the Eco2mix API. Real Docker dry-run fetches recent records with actual consumption values from `https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/eco2mix-national-tr/records` and prints mapped raw envelopes. Each envelope includes curated convenience fields and the full Opendatasoft record under `payload.source_fields`. Publish mode fetches recent real records and sends them to the topic stored in `ENERGY_MARKET_KAFKA_TOPIC`, which should be `raw.fr.energy_grid` for the current infrastructure.
+Offline Docker dry-run prints sample raw event-envelope JSON to stdout and does not contact Kafka or the Eco2mix API. Real Docker dry-run fetches recent records with actual consumption values from `https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/eco2mix-national-tr/records` and prints mapped raw envelopes. Backfill mode fetches historical consolidated or definitive records from `https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/eco2mix-national-cons-def/records` between the requested UTC start and end dates, inclusive. Each envelope includes curated convenience fields and the full Opendatasoft record under `payload.source_fields`. Publish mode sends records to the topic stored in `ENERGY_MARKET_KAFKA_TOPIC`, which should be `raw.fr.energy_grid` for the current infrastructure.
 
 ## Troubleshooting
 

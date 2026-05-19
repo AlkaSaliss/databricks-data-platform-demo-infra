@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import argparse
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -8,12 +9,18 @@ from producers.common.kafka import KafkaConfigError, KafkaDeliveryResult, KafkaP
 from producers.common.logging import bind_logger, configure_logging
 from producers.common.runtime import RetryPolicy
 from producers.france_rte_producer import (
+    _parse_args,
+    _resolve_events,
+    build_backfill_where_clause,
     build_last_days_where_clause,
     eco2mix_record_to_raw_event,
     fetch_france_rte_events,
+    fetch_france_rte_events_for_backfill,
     fetch_france_rte_events_for_last_days,
     generate_sample_france_rte_events,
+    iter_monthly_date_ranges,
     publish_events,
+    run_backfill_mode,
     run_scheduled_mode,
 )
 
@@ -113,6 +120,17 @@ def test_last_days_where_clause_uses_lower_and_upper_datetime_bounds() -> None:
     assert "date_heure <= '2026-05-14T12:00:00Z'" in where
 
 
+def test_backfill_where_clause_uses_inclusive_utc_day_bounds() -> None:
+    where = build_backfill_where_clause(
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 1, 31),
+    )
+
+    assert "consommation is not null" in where
+    assert "date_heure >= '2024-01-01T00:00:00Z'" in where
+    assert "date_heure <= '2024-01-31T23:59:59Z'" in where
+
+
 def test_last_days_fetch_combines_paginated_api_records(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -150,6 +168,205 @@ def test_last_days_fetch_combines_paginated_api_records(
     assert [event["payload"]["metric_value"] for event in events] == [42000, 41900]
     assert [call[2] for call in calls] == [0, 1, 2]
     assert all(call[1] == 1 for call in calls)
+
+
+def test_backfill_fetch_combines_paginated_consolidated_api_records(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, int, int]] = []
+
+    def fake_fetch(where: str, limit: int, offset: int) -> list[dict[str, object]]:
+        calls.append((where, limit, offset))
+        if offset == 0:
+            return [
+                {
+                    "date_heure": "2024-01-01T00:00:00+00:00",
+                    "consommation": 53000,
+                }
+            ]
+        if offset == 1:
+            return [
+                {
+                    "date_heure": "2024-01-01T00:30:00+00:00",
+                    "consommation": 53100,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(
+        "producers.france_rte_producer._fetch_eco2mix_consolidated_records",
+        fake_fetch,
+    )
+
+    events = fetch_france_rte_events_for_backfill(
+        date(2024, 1, 1),
+        date(2024, 1, 31),
+        page_size=1,
+    )
+
+    assert [event["payload"]["metric_value"] for event in events] == [53000, 53100]
+    assert [call[2] for call in calls] == [0, 1, 2]
+    assert all(call[1] == 1 for call in calls)
+    assert "date_heure >= '2024-01-01T00:00:00Z'" in calls[0][0]
+    assert "date_heure <= '2024-01-31T23:59:59Z'" in calls[0][0]
+
+
+def test_backfill_fetch_resets_offsets_for_each_month(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, int, int]] = []
+
+    def fake_fetch(where: str, limit: int, offset: int) -> list[dict[str, object]]:
+        calls.append((where, limit, offset))
+        if offset == 0:
+            return [
+                {
+                    "date_heure": "2024-01-01T00:00:00+00:00",
+                    "consommation": 53000,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(
+        "producers.france_rte_producer._fetch_eco2mix_consolidated_records",
+        fake_fetch,
+    )
+
+    events = fetch_france_rte_events_for_backfill(
+        date(2024, 1, 31),
+        date(2024, 2, 1),
+        page_size=1,
+    )
+
+    assert len(events) == 2
+    assert [call[2] for call in calls] == [0, 1, 0, 1]
+    assert "date_heure >= '2024-01-31T00:00:00Z'" in calls[0][0]
+    assert "date_heure <= '2024-01-31T23:59:59Z'" in calls[0][0]
+    assert "date_heure >= '2024-02-01T00:00:00Z'" in calls[2][0]
+    assert "date_heure <= '2024-02-01T23:59:59Z'" in calls[2][0]
+
+
+def test_monthly_date_ranges_split_long_backfill_without_gaps() -> None:
+    ranges = iter_monthly_date_ranges(date(2024, 1, 30), date(2024, 3, 2))
+
+    assert ranges == [
+        (date(2024, 1, 30), date(2024, 1, 31)),
+        (date(2024, 2, 1), date(2024, 2, 29)),
+        (date(2024, 3, 1), date(2024, 3, 2)),
+    ]
+
+
+def test_backfill_arg_parser_requires_paired_dates() -> None:
+    with pytest.raises(SystemExit):
+        _parse_args(["--backfill-start-date", "2024-01-01"])
+
+
+def test_backfill_arg_parser_rejects_invalid_date() -> None:
+    with pytest.raises(SystemExit):
+        _parse_args(["--backfill-start-date", "2024/01/01", "--backfill-end-date", "2024-01-31"])
+
+
+def test_backfill_arg_parser_rejects_start_after_end() -> None:
+    with pytest.raises(SystemExit):
+        _parse_args(["--backfill-start-date", "2024-02-01", "--backfill-end-date", "2024-01-31"])
+
+
+def test_resolve_events_prefers_backfill_over_last_days_and_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, object]] = []
+
+    def fake_backfill(start_date: date, end_date: date, **kwargs: object) -> list[dict[str, object]]:
+        calls.append(("backfill", (start_date, end_date)))
+        return [
+            {
+                "event_id": "fr-rte-20240101T000000-consumption",
+                "payload": {"metric_value": 53000},
+            }
+        ]
+
+    def fail_last_days(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        raise AssertionError("last-days fetch should not run when backfill dates are provided")
+
+    def fail_latest(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        raise AssertionError("latest count fetch should not run when backfill dates are provided")
+
+    monkeypatch.setattr("producers.france_rte_producer.fetch_france_rte_events_for_backfill", fake_backfill)
+    monkeypatch.setattr("producers.france_rte_producer.fetch_france_rte_events_for_last_days", fail_last_days)
+    monkeypatch.setattr("producers.france_rte_producer.fetch_france_rte_events", fail_latest)
+
+    args = argparse.Namespace(
+        source="api",
+        count=3,
+        last_days=1,
+        backfill_start_date=date(2024, 1, 1),
+        backfill_end_date=date(2024, 1, 31),
+        request_rate_limit_per_second=None,
+    )
+    logger = bind_logger(
+        configure_logging(
+            logger_name="tests.resolve_backfill",
+            level="INFO",
+            log_format="text",
+        )
+    )
+
+    events = _resolve_events(args, RetryPolicy(max_attempts=1, backoff_seconds=0), logger)
+
+    assert events[0]["event_id"] == "fr-rte-20240101T000000-consumption"
+    assert calls == [("backfill", (date(2024, 1, 1), date(2024, 1, 31)))]
+
+
+def test_backfill_mode_streams_each_month_without_accumulating_full_range(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[date, date]] = []
+
+    def fake_fetch_range(
+        start_date: date,
+        end_date: date,
+        **kwargs: object,
+    ) -> list[dict[str, object]]:
+        calls.append((start_date, end_date))
+        return [
+            {
+                "date_heure": f"{start_date.isoformat()}T00:00:00+00:00",
+                "consommation": 53000,
+            }
+        ]
+
+    monkeypatch.setattr(
+        "producers.france_rte_producer.fetch_france_rte_records_for_backfill_range",
+        fake_fetch_range,
+    )
+    args = argparse.Namespace(
+        source="api",
+        dry_run=True,
+        backfill_start_date=date(2024, 1, 31),
+        backfill_end_date=date(2024, 2, 1),
+        request_rate_limit_per_second=None,
+        publish_rate_limit_per_second=None,
+        delay_seconds=0.0,
+    )
+    logger = bind_logger(
+        configure_logging(
+            logger_name="tests.backfill_stream",
+            level="INFO",
+            log_format="text",
+        )
+    )
+
+    event_count = run_backfill_mode(
+        args,
+        retry_policy=RetryPolicy(max_attempts=1, backoff_seconds=0),
+        logger=logger,
+    )
+
+    assert event_count == 2
+    assert calls == [
+        (date(2024, 1, 31), date(2024, 1, 31)),
+        (date(2024, 2, 1), date(2024, 2, 1)),
+    ]
+    output = capsys.readouterr().out
+    assert "fr-rte-20240131T000000-consumption" in output
+    assert "fr-rte-20240201T000000-consumption" in output
 
 
 def test_latest_count_fetch_maps_api_records(monkeypatch: pytest.MonkeyPatch) -> None:

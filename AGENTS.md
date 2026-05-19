@@ -1,0 +1,1 @@
+Unless otherwise specified, create a new branch for each feature or bug fix.

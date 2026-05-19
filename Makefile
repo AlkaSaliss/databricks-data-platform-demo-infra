@@ -1,12 +1,15 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars flink-export-vars kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
 STACK ?= account-admin
 COUNT ?= 3
 LAST_DAYS ?= 1
+API_TIMEOUT_SECONDS ?= 30
+BACKFILL_START_DATE ?=
+BACKFILL_END_DATE ?=
 PYTHON ?= python3
 RETRY_MAX_ATTEMPTS ?= 3
 RETRY_BACKOFF_SECONDS ?= 1
@@ -92,18 +95,24 @@ fmt-check: ## Check Terraform and Terragrunt formatting without rewriting files
 clean: ## Remove Terragrunt and Terraform cache directories
 	@find . -type d \( -name '.terragrunt-cache' -o -name '.terraform' \) -prune -exec rm -rf {} + 2>/dev/null || true
 
-kafka-export-vars: ## Show commands that export Kafka producer variables from Terraform outputs
+kafka-export-vars-local: ## Show commands that export Kafka producer variables from Terraform outputs
 	@printf '%s\n' \
 		'. ./bin/set_env_vars.sh' \
 		'. ./bin/set_aws_credentials.sh' \
 		'. ./bin/set_kafka_output_api_keys.sh'
 
-flink-export-vars: ## Print source commands for Flink Kafka and S3 variables
+flink-export-vars-local: ## Print source commands for Flink Kafka and S3 variables
 	@printf '%s\n' \
 		'# Run these commands in your current shell. This target only prints them.' \
 		'. ./bin/set_env_vars.sh' \
 		'. ./bin/set_aws_credentials.sh' \
 		'. ./bin/set_flink_output_vars.sh'
+
+all-env-vars-export-local: ## Set all environment variables for the project
+	. ./bin/set_aws_credentials.sh
+	. ./bin/set_env_vars.sh
+	. ./bin/set_kafka_output_api_keys.sh
+	. ./bin/set_flink_output_vars.sh
 
 kafka-producer-docker-build: ## Build the Docker image for the France Eco2mix producer
 	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) build france-eco2mix-producer
@@ -119,6 +128,16 @@ kafka-producer-docker-scheduled-dry-run: ## Run scheduled last-days Eco2mix dry-
 
 kafka-producer-docker-run: ## Fetch real last-days Eco2mix data and publish from Docker
 	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --last-days $(LAST_DAYS) $(PRODUCER_RUNTIME_ARGS)
+
+kafka-producer-docker-backfill-dry-run: ## Run historical consolidated Eco2mix backfill dry-run in Docker
+	@test -n "$(BACKFILL_START_DATE)" || (echo "Missing BACKFILL_START_DATE, for example 2024-01-01" >&2; exit 1)
+	@test -n "$(BACKFILL_END_DATE)" || (echo "Missing BACKFILL_END_DATE, for example 2024-01-31" >&2; exit 1)
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --backfill-start-date $(BACKFILL_START_DATE) --backfill-end-date $(BACKFILL_END_DATE) --api-timeout-seconds $(API_TIMEOUT_SECONDS) --dry-run $(PRODUCER_RUNTIME_ARGS)
+
+kafka-producer-docker-backfill-run: ## Fetch historical consolidated Eco2mix data and publish from Docker
+	@test -n "$(BACKFILL_START_DATE)" || (echo "Missing BACKFILL_START_DATE, for example 2024-01-01" >&2; exit 1)
+	@test -n "$(BACKFILL_END_DATE)" || (echo "Missing BACKFILL_END_DATE, for example 2024-01-31" >&2; exit 1)
+	@docker compose -f $(ENERGY_PRODUCER_APP_DIR)/compose.yaml --project-directory $(ENERGY_PRODUCER_APP_DIR) run --rm france-eco2mix-producer --backfill-start-date $(BACKFILL_START_DATE) --backfill-end-date $(BACKFILL_END_DATE) --api-timeout-seconds $(API_TIMEOUT_SECONDS) $(PRODUCER_RUNTIME_ARGS)
 
 producer-test: ## Run Python producer tests
 	@cd $(ENERGY_PRODUCER_APP_DIR) && $(PYTHON) -m pytest

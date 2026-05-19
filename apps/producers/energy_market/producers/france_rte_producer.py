@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from time import sleep
 from typing import Any, Callable
 from urllib.parse import urlencode
@@ -18,6 +18,10 @@ from producers.common.runtime import RateLimiter, RetryPolicy, call_with_retries
 ECO2MIX_RECORDS_URL = (
     "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/"
     "eco2mix-national-tr/records"
+)
+ECO2MIX_CONSOLIDATED_RECORDS_URL = (
+    "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/"
+    "eco2mix-national-cons-def/records"
 )
 DEFAULT_PAGE_SIZE = 100
 
@@ -41,6 +45,13 @@ def positive_float(raw_value: str) -> float:
     if value <= 0:
         raise argparse.ArgumentTypeError("value must be greater than zero")
     return value
+
+
+def iso_date(raw_value: str) -> date:
+    try:
+        return date.fromisoformat(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("date must use YYYY-MM-DD format") from exc
 
 
 def generate_sample_france_rte_events(
@@ -140,12 +151,182 @@ def fetch_france_rte_events_for_last_days(
     return [eco2mix_record_to_raw_event(record) for record in records]
 
 
+def fetch_france_rte_events_for_backfill(
+    start_date: date,
+    end_date: date,
+    *,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    retry_policy: RetryPolicy | None = None,
+    rate_limiter: RateLimiter | None = None,
+    fetch_page: Callable[[str, int, int], list[dict[str, Any]]] | None = None,
+    logger: Any | None = None,
+) -> list[dict[str, Any]]:
+    if start_date > end_date:
+        raise ValueError("backfill_start_date must be on or before backfill_end_date")
+    if page_size < 1:
+        raise ValueError("page_size must be greater than zero")
+
+    records: list[dict[str, Any]] = []
+    effective_fetch_page = fetch_page or _fetch_eco2mix_consolidated_records
+    monthly_ranges = iter_monthly_date_ranges(start_date, end_date)
+    _emit_backfill_progress(
+        logger,
+        "Starting Eco2mix consolidated backfill fetch.",
+        {
+            "backfill_start_date": start_date.isoformat(),
+            "backfill_end_date": end_date.isoformat(),
+            "chunk_count": len(monthly_ranges),
+            "page_size": page_size,
+        },
+    )
+    for chunk_number, (chunk_start_date, chunk_end_date) in enumerate(monthly_ranges, start=1):
+        _emit_backfill_progress(
+            logger,
+            "Fetching Eco2mix consolidated backfill chunk.",
+            {
+                "chunk_number": chunk_number,
+                "chunk_count": len(monthly_ranges),
+                "chunk_start_date": chunk_start_date.isoformat(),
+                "chunk_end_date": chunk_end_date.isoformat(),
+                "page_size": page_size,
+                "total_records_so_far": len(records),
+            },
+        )
+        chunk_records = fetch_france_rte_records_for_backfill_range(
+            chunk_start_date,
+            chunk_end_date,
+            page_size=page_size,
+            retry_policy=retry_policy,
+            rate_limiter=rate_limiter,
+            fetch_page=effective_fetch_page,
+            logger=logger,
+            progress_context={
+                "chunk_number": chunk_number,
+                "chunk_count": len(monthly_ranges),
+                "chunk_start_date": chunk_start_date.isoformat(),
+                "chunk_end_date": chunk_end_date.isoformat(),
+            },
+        )
+        records.extend(chunk_records)
+        _emit_backfill_progress(
+            logger,
+            "Completed Eco2mix consolidated backfill chunk.",
+            {
+                "chunk_number": chunk_number,
+                "chunk_count": len(monthly_ranges),
+                "chunk_start_date": chunk_start_date.isoformat(),
+                "chunk_end_date": chunk_end_date.isoformat(),
+                "chunk_records": len(chunk_records),
+                "total_records_so_far": len(records),
+            },
+        )
+    _emit_backfill_progress(
+        logger,
+        "Completed Eco2mix consolidated backfill fetch.",
+        {
+            "backfill_start_date": start_date.isoformat(),
+            "backfill_end_date": end_date.isoformat(),
+            "chunk_count": len(monthly_ranges),
+            "total_records": len(records),
+        },
+    )
+    return [eco2mix_record_to_raw_event(record) for record in records]
+
+
+def fetch_france_rte_records_for_backfill_range(
+    start_date: date,
+    end_date: date,
+    *,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    retry_policy: RetryPolicy | None = None,
+    rate_limiter: RateLimiter | None = None,
+    fetch_page: Callable[[str, int, int], list[dict[str, Any]]] | None = None,
+    logger: Any | None = None,
+    progress_context: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if start_date > end_date:
+        raise ValueError("start_date must be on or before end_date")
+    if page_size < 1:
+        raise ValueError("page_size must be greater than zero")
+
+    where = build_backfill_where_clause(start_date=start_date, end_date=end_date)
+    records: list[dict[str, Any]] = []
+    offset = 0
+    effective_fetch_page = fetch_page or _fetch_eco2mix_consolidated_records
+    context_base = dict(progress_context or {})
+    while True:
+        page = _fetch_page_with_resilience(
+            where=where,
+            limit=page_size,
+            offset=offset,
+            retry_policy=retry_policy,
+            rate_limiter=rate_limiter,
+            fetch_page=effective_fetch_page,
+            logger=logger,
+        )
+        records.extend(page)
+        _emit_backfill_progress(
+            logger,
+            "Fetched Eco2mix consolidated backfill page.",
+            {
+                **context_base,
+                "offset": offset,
+                "page_size": page_size,
+                "records_in_page": len(page),
+                "chunk_records_so_far": len(records),
+            },
+        )
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return records
+
+
 def build_last_days_where_clause(lower_bound: datetime, upper_bound: datetime) -> str:
     return (
         "consommation is not null "
         f"and date_heure >= '{_opendatasoft_datetime(lower_bound)}' "
         f"and date_heure <= '{_opendatasoft_datetime(upper_bound)}'"
     )
+
+
+def build_backfill_where_clause(start_date: date, end_date: date) -> str:
+    if start_date > end_date:
+        raise ValueError("start_date must be on or before end_date")
+    lower_bound = datetime.combine(start_date, time.min, tzinfo=UTC)
+    upper_bound = datetime.combine(end_date, time(23, 59, 59), tzinfo=UTC)
+    return (
+        "consommation is not null "
+        f"and date_heure >= '{_opendatasoft_datetime(lower_bound)}' "
+        f"and date_heure <= '{_opendatasoft_datetime(upper_bound)}'"
+    )
+
+
+def iter_monthly_date_ranges(start_date: date, end_date: date) -> list[tuple[date, date]]:
+    if start_date > end_date:
+        raise ValueError("start_date must be on or before end_date")
+
+    ranges: list[tuple[date, date]] = []
+    current_start = start_date
+    while current_start <= end_date:
+        next_month_start = _first_day_of_next_month(current_start)
+        current_end = min(end_date, next_month_start - timedelta(days=1))
+        ranges.append((current_start, current_end))
+        current_start = next_month_start
+    return ranges
+
+
+def _emit_backfill_progress(logger: Any | None, message: str, context: dict[str, Any]) -> None:
+    if logger is not None:
+        logger.info(message, extra={"context": context})
+        return
+    print(f"{message} {json.dumps(context, sort_keys=True)}", flush=True)
+
+
+def _first_day_of_next_month(value: date) -> date:
+    if value.month == 12:
+        return date(value.year + 1, 1, 1)
+    return date(value.year, value.month + 1, 1)
 
 
 def publish_events(
@@ -184,6 +365,153 @@ def publish_events(
         )
     producer.flush()
     return published
+
+
+def publish_events_with_producer(
+    events: list[dict[str, Any]],
+    *,
+    producer: ConfluentKafkaEventProducer,
+    topic: str,
+    retry_policy: RetryPolicy,
+    logger: Any,
+    rate_limiter: RateLimiter | None = None,
+    initial_published_count: int = 0,
+) -> int:
+    published = initial_published_count
+    for event in events:
+        if rate_limiter is not None:
+            rate_limiter.wait()
+        delivery = call_with_retries(
+            lambda event=event: producer.publish(event),
+            retry_policy=retry_policy,
+            logger=logger,
+            action="kafka_publish",
+            context={"event_id": event["event_id"], "topic": topic},
+        )
+        published += 1
+        logger.info(
+            "Published event.",
+            extra={
+                "context": {
+                    "event_id": event["event_id"],
+                    "topic": delivery.topic,
+                    "partition": delivery.partition,
+                    "offset": delivery.offset,
+                    "published_count": published,
+                }
+            },
+        )
+    return published
+
+
+def run_backfill_mode(
+    args: argparse.Namespace,
+    *,
+    retry_policy: RetryPolicy,
+    logger: Any,
+    producer_factory: Callable[[KafkaProducerConfig], ConfluentKafkaEventProducer] = ConfluentKafkaEventProducer,
+) -> int:
+    _validate_backfill_args(args)
+    if args.backfill_start_date is None or args.backfill_end_date is None:
+        raise ValueError("backfill dates are required")
+
+    request_rate_limiter = (
+        RateLimiter(args.request_rate_limit_per_second) if args.request_rate_limit_per_second else None
+    )
+    publish_rate_limit = _resolve_publish_rate_limit(args)
+    publish_rate_limiter = RateLimiter(publish_rate_limit) if publish_rate_limit else None
+    monthly_ranges = iter_monthly_date_ranges(args.backfill_start_date, args.backfill_end_date)
+    total_events = 0
+    producer: ConfluentKafkaEventProducer | None = None
+    config: KafkaProducerConfig | None = None
+    if not args.dry_run:
+        config = KafkaProducerConfig.from_env()
+        producer = producer_factory(config)
+
+    _emit_backfill_progress(
+        logger,
+        "Starting streaming Eco2mix consolidated backfill.",
+        {
+            "backfill_start_date": args.backfill_start_date.isoformat(),
+            "backfill_end_date": args.backfill_end_date.isoformat(),
+            "chunk_count": len(monthly_ranges),
+            "page_size": DEFAULT_PAGE_SIZE,
+            "dry_run": args.dry_run,
+        },
+    )
+    try:
+        for chunk_number, (chunk_start_date, chunk_end_date) in enumerate(monthly_ranges, start=1):
+            _emit_backfill_progress(
+                logger,
+                "Fetching streaming Eco2mix consolidated backfill chunk.",
+                {
+                    "chunk_number": chunk_number,
+                    "chunk_count": len(monthly_ranges),
+                    "chunk_start_date": chunk_start_date.isoformat(),
+                    "chunk_end_date": chunk_end_date.isoformat(),
+                    "total_events_so_far": total_events,
+                },
+            )
+            records = fetch_france_rte_records_for_backfill_range(
+                chunk_start_date,
+                chunk_end_date,
+                retry_policy=retry_policy,
+                rate_limiter=request_rate_limiter,
+                logger=logger,
+                progress_context={
+                    "chunk_number": chunk_number,
+                    "chunk_count": len(monthly_ranges),
+                    "chunk_start_date": chunk_start_date.isoformat(),
+                    "chunk_end_date": chunk_end_date.isoformat(),
+                },
+            )
+            events = [eco2mix_record_to_raw_event(record) for record in records]
+            logger.info(
+                "Prepared streaming backfill chunk events.",
+                extra={
+                    "context": {
+                        "chunk_number": chunk_number,
+                        "chunk_count": len(monthly_ranges),
+                        "chunk_start_date": chunk_start_date.isoformat(),
+                        "chunk_end_date": chunk_end_date.isoformat(),
+                        "event_count": len(events),
+                    }
+                },
+            )
+            if args.dry_run:
+                for event in events:
+                    print(json.dumps(event, sort_keys=True))
+                total_events += len(events)
+            else:
+                if producer is None or config is None:
+                    raise RuntimeError("Kafka producer was not initialized for backfill publish mode")
+                total_events = publish_events_with_producer(
+                    events,
+                    producer=producer,
+                    topic=config.topic,
+                    retry_policy=retry_policy,
+                    logger=logger,
+                    rate_limiter=publish_rate_limiter,
+                    initial_published_count=total_events,
+                )
+            _emit_backfill_progress(
+                logger,
+                "Completed streaming Eco2mix consolidated backfill chunk.",
+                {
+                    "chunk_number": chunk_number,
+                    "chunk_count": len(monthly_ranges),
+                    "chunk_start_date": chunk_start_date.isoformat(),
+                    "chunk_end_date": chunk_end_date.isoformat(),
+                    "chunk_events": len(events),
+                    "total_events_so_far": total_events,
+                },
+            )
+    finally:
+        if producer is not None:
+            producer.flush()
+
+    logger.info("Completed streaming backfill producer execution.", extra={"context": {"event_count": total_events}})
+    return total_events
 
 
 def run_scheduled_mode(
@@ -233,6 +561,14 @@ def _fetch_page_with_resilience(
 
 
 def _fetch_eco2mix_records(where: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    return _fetch_eco2mix_records_from_url(ECO2MIX_RECORDS_URL, where, limit, offset)
+
+
+def _fetch_eco2mix_consolidated_records(where: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    return _fetch_eco2mix_records_from_url(ECO2MIX_CONSOLIDATED_RECORDS_URL, where, limit, offset)
+
+
+def _fetch_eco2mix_records_from_url(url: str, where: str, limit: int, offset: int) -> list[dict[str, Any]]:
     params = urlencode(
         {
             "limit": limit,
@@ -242,7 +578,8 @@ def _fetch_eco2mix_records(where: str, limit: int, offset: int) -> list[dict[str
             "timezone": "UTC",
         }
     )
-    with urlopen(f"{ECO2MIX_RECORDS_URL}?{params}", timeout=30) as response:
+    timeout_seconds = int(os.environ.get("API_TIMEOUT_SECONDS", "30"))
+    with urlopen(f"{url}?{params}", timeout=timeout_seconds) as response:
         body = response.read().decode("utf-8")
     payload = json.loads(body)
     records = payload.get("results", [])
@@ -317,6 +654,18 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Fetch all measured Eco2mix records from the last N days. Takes precedence over --count.",
     )
+    parser.add_argument(
+        "--backfill-start-date",
+        type=iso_date,
+        default=None,
+        help="Fetch historical consolidated Eco2mix records from this UTC date, inclusive, in YYYY-MM-DD format.",
+    )
+    parser.add_argument(
+        "--backfill-end-date",
+        type=iso_date,
+        default=None,
+        help="Fetch historical consolidated Eco2mix records through this UTC date, inclusive, in YYYY-MM-DD format.",
+    )
     parser.add_argument("--source", choices=["api", "sample"], default="api")
     parser.add_argument("--dry-run", action="store_true", help="Print events without publishing to Kafka.")
     parser.add_argument(
@@ -326,6 +675,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Legacy publish delay between events. Prefer --publish-rate-limit-per-second for new runs.",
     )
     parser.add_argument("--retry-max-attempts", type=positive_int, default=3)
+    parser.add_argument("--api-timeout-seconds", type=positive_int, default=30)
     parser.add_argument("--retry-backoff-seconds", type=non_negative_float, default=1.0)
     parser.add_argument("--request-rate-limit-per-second", type=positive_float, default=None)
     parser.add_argument("--publish-rate-limit-per-second", type=positive_float, default=None)
@@ -336,10 +686,39 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _validate_backfill_args(args: argparse.Namespace) -> None:
+    start_date = args.backfill_start_date
+    end_date = args.backfill_end_date
+    if (start_date is None) != (end_date is None):
+        raise ValueError("--backfill-start-date and --backfill-end-date must be provided together")
+    if start_date is not None and end_date is not None and start_date > end_date:
+        raise ValueError("--backfill-start-date must be on or before --backfill-end-date")
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    os.environ["API_TIMEOUT_SECONDS"] = str(args.api_timeout_seconds)
+    try:
+        _validate_backfill_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return args
+
+
 def _resolve_events(args: argparse.Namespace, retry_policy: RetryPolicy, logger: Any) -> list[dict[str, Any]]:
+    _validate_backfill_args(args)
     request_rate_limiter = (
         RateLimiter(args.request_rate_limit_per_second) if args.request_rate_limit_per_second else None
     )
+    if args.source == "api" and args.backfill_start_date is not None and args.backfill_end_date is not None:
+        return fetch_france_rte_events_for_backfill(
+            args.backfill_start_date,
+            args.backfill_end_date,
+            retry_policy=retry_policy,
+            rate_limiter=request_rate_limiter,
+            logger=logger,
+        )
     if args.source == "api" and args.last_days is not None:
         return fetch_france_rte_events_for_last_days(
             args.last_days,
@@ -357,11 +736,25 @@ def _resolve_events(args: argparse.Namespace, retry_policy: RetryPolicy, logger:
     return generate_sample_france_rte_events(args.count)
 
 
+def _is_api_backfill(args: argparse.Namespace) -> bool:
+    return args.source == "api" and args.backfill_start_date is not None and args.backfill_end_date is not None
+
+
+def _resolve_publish_rate_limit(args: argparse.Namespace) -> float | None:
+    publish_rate_limit = args.publish_rate_limit_per_second
+    if publish_rate_limit is None and args.delay_seconds > 0:
+        publish_rate_limit = 1.0 / args.delay_seconds if args.delay_seconds > 0 else None
+    return publish_rate_limit
+
+
 def _run_once(args: argparse.Namespace, logger: Any) -> int:
     retry_policy = RetryPolicy(
         max_attempts=args.retry_max_attempts,
         backoff_seconds=args.retry_backoff_seconds,
     )
+    if _is_api_backfill(args):
+        return run_backfill_mode(args, retry_policy=retry_policy, logger=logger)
+
     events = _resolve_events(args, retry_policy, logger)
     logger.info("Prepared producer events.", extra={"context": {"event_count": len(events)}})
 
@@ -372,9 +765,7 @@ def _run_once(args: argparse.Namespace, logger: Any) -> int:
         return len(events)
 
     config = KafkaProducerConfig.from_env()
-    publish_rate_limit = args.publish_rate_limit_per_second
-    if publish_rate_limit is None and args.delay_seconds > 0:
-        publish_rate_limit = 1.0 / args.delay_seconds if args.delay_seconds > 0 else None
+    publish_rate_limit = _resolve_publish_rate_limit(args)
     published = publish_events(
         events,
         config=config,
@@ -387,7 +778,7 @@ def _run_once(args: argparse.Namespace, logger: Any) -> int:
 
 
 def main() -> int:
-    args = _build_parser().parse_args()
+    args = _parse_args()
     base_logger = configure_logging(
         logger_name="producers.france_rte_producer",
         level=args.log_level,
