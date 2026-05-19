@@ -47,6 +47,14 @@
             <configuration>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <finalName>pyflink-dependencies</finalName>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>org/apache/commons/cli/**</exclude>
+                  </excludes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
         </executions>

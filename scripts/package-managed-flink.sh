@@ -47,6 +47,7 @@ build_dependency_jar_from_downloads() {
   done
 
   rm -f "${unpack_dir}/META-INF/"*.SF "${unpack_dir}/META-INF/"*.DSA "${unpack_dir}/META-INF/"*.RSA
+  rm -rf "${unpack_dir}/org/apache/commons/cli"
   (
     cd "${unpack_dir}"
     jar cf "${dependency_dir}/target/pyflink-dependencies.jar" .
