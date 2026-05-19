@@ -63,9 +63,21 @@ Publish the last two days of measured Eco2mix records:
 make kafka-producer-docker-run LAST_DAYS=2
 ```
 
+Fetch historical consolidated Eco2mix data for January 2024 and print envelopes without publishing:
+
+```bash
+make kafka-producer-docker-backfill-dry-run BACKFILL_START_DATE=2024-01-01 BACKFILL_END_DATE=2024-01-31
+```
+
+Publish historical consolidated Eco2mix records for the same date range:
+
+```bash
+make kafka-producer-docker-backfill-run BACKFILL_START_DATE=2024-01-01 BACKFILL_END_DATE=2024-01-31
+```
+
 ## Expected Behavior
 
-`--last-days` fetches records where `consommation is not null`, `date_heure` is greater than or equal to `now - LAST_DAYS`, and `date_heure` is less than or equal to `now`. The producer paginates through all matching Opendatasoft records and maps each record into the raw Kafka envelope, preserving the complete source record under `payload.source_fields`.
+`--last-days` fetches records from `eco2mix-national-tr` where `consommation is not null`, `date_heure` is greater than or equal to `now - LAST_DAYS`, and `date_heure` is less than or equal to `now`. `--backfill-start-date` and `--backfill-end-date` fetch records from `eco2mix-national-cons-def` where `consommation is not null`, `date_heure` is greater than or equal to the start date at `00:00:00Z`, and `date_heure` is less than or equal to the end date at `23:59:59Z`. The producer paginates through all matching Opendatasoft records and maps each record into the raw Kafka envelope, preserving the complete source record under `payload.source_fields`.
 
 ## Troubleshooting
 
