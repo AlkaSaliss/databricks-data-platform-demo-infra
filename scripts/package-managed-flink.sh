@@ -84,6 +84,7 @@ rm -rf "${stage_dir}"
 mkdir -p "${stage_dir}/jobs" "${stage_dir}/lib"
 
 cp "${app_dir}/pyproject.toml" "${stage_dir}/"
+cp "${app_dir}/raw_fr_energy_grid_to_s3.py" "${stage_dir}/"
 cp "${app_dir}/jobs/"*.py "${stage_dir}/jobs/"
 cp "${dependency_dir}/target/pyflink-dependencies.jar" "${stage_dir}/lib/pyflink-dependencies.jar"
 
