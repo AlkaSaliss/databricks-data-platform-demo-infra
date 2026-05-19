@@ -7,9 +7,12 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Mapping
 
 DEFAULT_GROUP_ID = "energy-market-flink-bronze"
+MANAGED_FLINK_PROPERTIES_PATH = Path("/etc/flink/application_properties.json")
+MANAGED_FLINK_PROPERTY_GROUP_ID = "bronze-sink-config"
 
 
 class FlinkConfigError(RuntimeError):
@@ -24,6 +27,12 @@ class BronzeSinkConfig:
     kafka_api_secret: str
     kafka_group_id: str
     s3_bronze_uri: str
+
+    @classmethod
+    def from_runtime(cls) -> "BronzeSinkConfig":
+        if MANAGED_FLINK_PROPERTIES_PATH.exists():
+            return cls.from_managed_flink_properties(MANAGED_FLINK_PROPERTIES_PATH)
+        return cls.from_env()
 
     @classmethod
     def from_env(cls) -> "BronzeSinkConfig":
@@ -51,6 +60,34 @@ class BronzeSinkConfig:
             kafka_api_secret=required_vars["FLINK_KAFKA_API_SECRET"] or "",
             kafka_group_id=os.getenv("FLINK_KAFKA_GROUP_ID", DEFAULT_GROUP_ID),
             s3_bronze_uri=required_vars["FLINK_S3_BRONZE_URI"] or "",
+        )
+
+    @classmethod
+    def from_managed_flink_properties(cls, path: Path) -> "BronzeSinkConfig":
+        properties = _load_managed_flink_property_group(path, MANAGED_FLINK_PROPERTY_GROUP_ID)
+        required_keys = {
+            "kafka_bootstrap_servers": properties.get("kafka_bootstrap_servers"),
+            "kafka_topic": properties.get("kafka_topic"),
+            "kafka_api_key": properties.get("kafka_api_key"),
+            "kafka_api_secret": properties.get("kafka_api_secret"),
+            "s3_bronze_uri": properties.get("s3_bronze_uri"),
+        }
+        missing = [name for name, value in required_keys.items() if not value]
+        if missing:
+            missing_list = ", ".join(missing)
+            raise FlinkConfigError(
+                f"Missing Managed Flink properties in {MANAGED_FLINK_PROPERTY_GROUP_ID}: {missing_list}."
+            )
+
+        return cls(
+            kafka_bootstrap_servers=normalize_bootstrap_servers(
+                required_keys["kafka_bootstrap_servers"] or ""
+            ),
+            kafka_topic=required_keys["kafka_topic"] or "",
+            kafka_api_key=required_keys["kafka_api_key"] or "",
+            kafka_api_secret=required_keys["kafka_api_secret"] or "",
+            kafka_group_id=properties.get("kafka_group_id", DEFAULT_GROUP_ID),
+            s3_bronze_uri=required_keys["s3_bronze_uri"] or "",
         )
 
 
@@ -162,7 +199,7 @@ def main() -> int:
     parser.add_argument("--dry-run-config", action="store_true", help="Validate and print non-secret job config.")
     args = parser.parse_args()
 
-    config = BronzeSinkConfig.from_env()
+    config = BronzeSinkConfig.from_runtime()
     if args.dry_run_config:
         print(
             json.dumps(
@@ -190,6 +227,35 @@ def _require_text(event: Mapping[str, Any], field_name: str) -> str:
 
 def _sql(value: str) -> str:
     return value.replace("'", "''")
+
+
+def _load_managed_flink_property_group(path: Path, group_id: str) -> Mapping[str, str]:
+    with path.open(encoding="utf-8") as file:
+        document = json.load(file)
+
+    if isinstance(document, list):
+        for item in document:
+            if isinstance(item, Mapping) and item.get("PropertyGroupId") == group_id:
+                property_map = item.get("PropertyMap")
+                if isinstance(property_map, Mapping):
+                    return _text_property_map(property_map)
+    elif isinstance(document, Mapping):
+        group = document.get(group_id)
+        if isinstance(group, Mapping):
+            return _text_property_map(group)
+        property_groups = document.get("PropertyGroups")
+        if isinstance(property_groups, list):
+            for item in property_groups:
+                if isinstance(item, Mapping) and item.get("PropertyGroupId") == group_id:
+                    property_map = item.get("PropertyMap")
+                    if isinstance(property_map, Mapping):
+                        return _text_property_map(property_map)
+
+    raise FlinkConfigError(f"Managed Flink property group not found: {group_id}.")
+
+
+def _text_property_map(property_map: Mapping[str, Any]) -> dict[str, str]:
+    return {key: value for key, value in property_map.items() if isinstance(key, str) and isinstance(value, str)}
 
 
 if __name__ == "__main__":

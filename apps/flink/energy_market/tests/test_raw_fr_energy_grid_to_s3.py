@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -46,6 +47,79 @@ def test_config_reads_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.kafka_bootstrap_servers == "pkc.example.aws.confluent.cloud:9092"
     assert config.kafka_group_id == "energy-market-flink-bronze"
     assert config.s3_bronze_uri == "s3://bucket/bronze/raw_fr_energy_grid/"
+
+
+def test_runtime_config_prefers_managed_flink_properties(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    properties_path = tmp_path / "application_properties.json"
+    properties_path.write_text(
+        json.dumps(
+            [
+                {
+                    "PropertyGroupId": "bronze-sink-config",
+                    "PropertyMap": {
+                        "kafka_bootstrap_servers": "SASL_SSL://pkc.example.aws.confluent.cloud:9092",
+                        "kafka_topic": "raw.fr.energy_grid",
+                        "kafka_api_key": "managed-key",
+                        "kafka_api_secret": "managed-secret",
+                        "kafka_group_id": "managed-flink-bronze",
+                        "s3_bronze_uri": "s3://bucket/bronze/raw_fr_energy_grid/",
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "jobs.raw_fr_energy_grid_to_s3.MANAGED_FLINK_PROPERTIES_PATH", properties_path
+    )
+    monkeypatch.setenv("FLINK_KAFKA_API_KEY", "env-key")
+
+    config = BronzeSinkConfig.from_runtime()
+
+    assert config.kafka_bootstrap_servers == "pkc.example.aws.confluent.cloud:9092"
+    assert config.kafka_topic == "raw.fr.energy_grid"
+    assert config.kafka_api_key == "managed-key"
+    assert config.kafka_group_id == "managed-flink-bronze"
+    assert config.s3_bronze_uri == "s3://bucket/bronze/raw_fr_energy_grid/"
+
+
+def test_runtime_config_falls_back_to_env_when_managed_properties_are_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jobs.raw_fr_energy_grid_to_s3.MANAGED_FLINK_PROPERTIES_PATH",
+        Path("/tmp/energy-market-missing-application-properties.json"),
+    )
+    monkeypatch.setenv("FLINK_KAFKA_BOOTSTRAP_SERVERS", "pkc.example.aws.confluent.cloud:9092")
+    monkeypatch.setenv("FLINK_KAFKA_TOPIC", "raw.fr.energy_grid")
+    monkeypatch.setenv("FLINK_KAFKA_API_KEY", "key")
+    monkeypatch.setenv("FLINK_KAFKA_API_SECRET", "secret")
+    monkeypatch.setenv("FLINK_S3_BRONZE_URI", "s3://bucket/bronze/raw_fr_energy_grid/")
+
+    config = BronzeSinkConfig.from_runtime()
+
+    assert config.kafka_api_key == "key"
+    assert config.kafka_group_id == "energy-market-flink-bronze"
+
+
+def test_managed_flink_config_reports_missing_properties(tmp_path: Path) -> None:
+    properties_path = tmp_path / "application_properties.json"
+    properties_path.write_text(
+        json.dumps(
+            [
+                {
+                    "PropertyGroupId": "bronze-sink-config",
+                    "PropertyMap": {"kafka_topic": "raw.fr.energy_grid"},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FlinkConfigError, match="Missing Managed Flink properties"):
+        BronzeSinkConfig.from_managed_flink_properties(properties_path)
 
 
 def test_config_strips_confluent_bootstrap_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
