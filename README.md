@@ -9,15 +9,14 @@ This repository contains Terraform modules, Terragrunt live stacks, Dockerized p
 
 ## Stack Overview
 
-The active AWS/Databricks deployment is split into seven stacks under `src/live/<env>/<region>`:
+The active AWS/Databricks deployment is split into six stacks under `src/live/<env>/<region>`:
 
 1. `terraform-state-infra`
 2. `account-admin`
 3. `network-infra`
 4. `uc-metastore-infra`
-5. `workspace-infra`
-6. `streaming-lake-infra`
-7. `databricks-lakehouse-infra`
+5. `streaming-lake-infra`
+6. `workspace-infra`
 
 Recommended deployment order is the same as the list above. Destroy order is the reverse.
 
@@ -33,7 +32,6 @@ Recommended deployment order is the same as the list above. Destroy order is the
 │   └── energy_market/
 ├── doc/
 │   ├── account-admin.md
-│   ├── databricks-lakehouse-infra.md
 │   ├── network-infra.md
 │   ├── streaming-lake-infra.md
 │   ├── terraform-state-infra.md
@@ -48,7 +46,6 @@ Recommended deployment order is the same as the list above. Destroy order is the
     │       ├── env.hcl
     │       └── eu-west-1/
     │           ├── account-admin/
-    │           ├── databricks-lakehouse-infra/
     │           ├── network-infra/
     │           ├── streaming-lake-infra/
     │           ├── terraform-state-infra/
@@ -161,13 +158,13 @@ Its `raw_fr_energy_grid_bronze_uri` output is exported by `bin/set_flink_output_
 
 ## Databricks Lakehouse And DAB
 
-Deploy `databricks-lakehouse-infra` after the workspace and streaming lake stacks:
+Deploy `workspace-infra` after the streaming lake stack:
 
 ```bash
-make deploy STACK=databricks-lakehouse-infra
+make deploy STACK=workspace-infra
 ```
 
-This creates the Unity Catalog namespace and exposes the streaming lake bucket as:
+The workspace stack creates the Unity Catalog namespace and exposes the streaming lake bucket as:
 
 ```text
 /Volumes/energy_market_demo/bronze/streaming_lake
@@ -302,7 +299,7 @@ The repository uses these GitHub Actions workflows:
 - `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
 - `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
 - `.github/workflows/streaming-lake-infra.yml` runs independent S3 bronze bucket validation, planning, and manual deployment.
-- `.github/workflows/databricks-lakehouse.yml` runs independent Databricks lakehouse validation, planning, bundle validation, and manual deployment/run actions.
+- `.github/workflows/databricks-lakehouse.yml` validates, deploys, and runs the Databricks Asset Bundle.
 - `.github/workflows/producer-tests.yml` runs producer unit tests, Docker producer dry-runs, Docker image validation, and Flink job unit tests without publishing to Kafka.
 
 The AWS/Databricks workflows target the active workspace stacks sequentially for `dev/eu-west-1`:
@@ -310,13 +307,13 @@ The AWS/Databricks workflows target the active workspace stacks sequentially for
 1. `account-admin`
 2. `network-infra`
 3. `uc-metastore-infra`
-4. `workspace-infra`
+4. `streaming-lake-infra`
+5. `workspace-infra`
 
 `terraform-state-infra` is intentionally excluded from CI/CD because it bootstraps the remote state bucket and lock table and is deployed once manually.
-Active workspace destroys run in reverse order: `workspace-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
+Active workspace destroys run in reverse order: `workspace-infra`, `streaming-lake-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
 
-`streaming-lake-infra` is deployed by the separate Streaming Lake workflow because it only needs AWS credentials and should not depend on Databricks CI secrets.
-`databricks-lakehouse-infra` is deployed after `streaming-lake-infra` when running `make deploy-all`, or directly with `make deploy STACK=databricks-lakehouse-infra`.
+The workspace stack depends on `streaming-lake-infra` because it creates the Unity Catalog external volume over that bucket.
 
 ### GitHub Variables And Secrets
 
@@ -389,10 +386,9 @@ Use `action=destroy` to run validation and planning first, then wait for the `de
 
 For the S3 bronze bucket, open **Actions** > **Streaming Lake Infrastructure** > **Run workflow** and choose `plan`, `apply`, or `destroy`.
 
-For the Databricks lakehouse objects and DAB pipeline, open **Actions** > **Databricks Lakehouse Pipeline** > **Run workflow** and choose:
+For the DAB pipeline, open **Actions** > **Databricks Lakehouse Pipeline** > **Run workflow** and choose:
 
-- `plan` to validate and plan the `databricks-lakehouse-infra` stack and validate the bundle.
-- `apply` or `destroy` to apply or destroy the lakehouse stack.
+- `validate-bundle` to validate the Databricks Asset Bundle.
 - `deploy-bundle` to deploy the Databricks Asset Bundle.
 - `run-pipeline` to deploy the bundle and run `energy_market_pipeline`.
 
@@ -404,4 +400,3 @@ For the Databricks lakehouse objects and DAB pipeline, open **Actions** > **Data
 - [uc-metastore-infra](./doc/uc-metastore-infra.md)
 - [workspace-infra](./doc/workspace-infra.md)
 - [streaming-lake-infra](./doc/streaming-lake-infra.md)
-- [databricks-lakehouse-infra](./doc/databricks-lakehouse-infra.md)

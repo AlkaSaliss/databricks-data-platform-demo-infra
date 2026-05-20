@@ -6,7 +6,7 @@ Add the Databricks side of the streaming demo so the S3 bronze files written by 
 
 ## Scope
 
-- Add `databricks-lakehouse-infra` for Unity Catalog catalog, schemas, storage credential, external location, and external volume.
+- Extend `workspace-infra` with Unity Catalog catalog, schemas, storage credential, external location, and external volume.
 - Add `databricks/energy_market` as a Databricks Asset Bundle.
 - Use Lakeflow Spark Declarative Pipelines with Auto Loader.
 - Read only the Flink raw bronze Parquet output as the Databricks source of truth.

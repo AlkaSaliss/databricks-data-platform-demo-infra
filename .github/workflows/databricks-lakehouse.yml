@@ -6,37 +6,24 @@ on:
       - ".github/workflows/databricks-lakehouse.yml"
       - "Makefile"
       - "databricks/**"
-      - "src/live/**/databricks-lakehouse-infra/**"
-      - "src/modules/databricks-lakehouse-infra/**"
-      - "doc/databricks-lakehouse-infra.md"
-      - "doc/streaming-lake-infra.md"
       - "doc/implementation-batches/**"
       - "README.md"
   workflow_dispatch:
     inputs:
       environment:
-        description: Terragrunt environment to deploy
+        description: Databricks bundle target environment
         required: true
         default: dev
         type: choice
         options:
           - dev
-      region:
-        description: AWS region to deploy
-        required: true
-        default: eu-west-1
-        type: choice
-        options:
-          - eu-west-1
       action:
         description: Action to run
         required: true
-        default: plan
+        default: validate-bundle
         type: choice
         options:
-          - plan
-          - apply
-          - destroy
+          - validate-bundle
           - deploy-bundle
           - run-pipeline
 
@@ -44,209 +31,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: databricks-lakehouse-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}-${{ github.event_name == 'workflow_dispatch' && inputs.region || 'eu-west-1' }}-${{ github.event.pull_request.number || github.run_id }}
+  group: databricks-lakehouse-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 env:
-  ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
-  REGION: ${{ github.event_name == 'workflow_dispatch' && inputs.region || 'eu-west-1' }}
-  STACK: databricks-lakehouse-infra
-  AWS_REGION: ${{ github.event_name == 'workflow_dispatch' && inputs.region || 'eu-west-1' }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-  DATABRICKS_ACCOUNT_ID: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
   DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
   DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
   DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
-  DATABRICKS_OWNER_EMAIL: ${{ vars.DATABRICKS_OWNER_EMAIL }}
 
 jobs:
-  validate-and-plan:
-    name: Validate lakehouse stack and bundle
+  bundle:
+    name: Validate, deploy, or run Databricks bundle
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Read tool versions
-        id: tool-versions
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform_version="$(awk '$1 == "terraform" { print $2 }' .tool-versions)"
-          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' .tool-versions)"
-
-          if [ -z "$terraform_version" ] || [ -z "$terragrunt_version" ]; then
-            echo "::error::Missing terraform or terragrunt version in .tool-versions"
-            exit 1
-          fi
-
-          echo "terraform=$terraform_version" >> "$GITHUB_OUTPUT"
-          echo "terragrunt=$terragrunt_version" >> "$GITHUB_OUTPUT"
-
-      - name: Verify GitHub configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in \
-            AWS_ACCESS_KEY_ID \
-            AWS_SECRET_ACCESS_KEY \
-            DATABRICKS_ACCOUNT_ID \
-            DATABRICKS_CLIENT_ID \
-            DATABRICKS_CLIENT_SECRET \
-            DATABRICKS_HOST \
-            DATABRICKS_OWNER_EMAIL; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::$name is not available. Configure it in the $ENVIRONMENT GitHub Environment or repository settings."
-              exit 1
-            fi
-          done
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ steps.tool-versions.outputs.terraform }}
-
-      - name: Install Terragrunt
-        shell: bash
-        run: |
-          set -euo pipefail
-          terragrunt_version="${{ steps.tool-versions.outputs.terragrunt }}"
-          curl -fsSL \
-            "https://github.com/gruntwork-io/terragrunt/releases/download/v${terragrunt_version}/terragrunt_linux_amd64" \
-            -o terragrunt
-          chmod +x terragrunt
-          sudo mv terragrunt /usr/local/bin/terragrunt
-          terragrunt --version
-
-      - name: Install Databricks CLI
-        uses: databricks/setup-cli@main
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Check formatting
-        shell: bash
-        run: make fmt-check
-
-      - name: Validate Terragrunt HCL
-        shell: bash
-        run: make hcl-validate ENV="$ENVIRONMENT" REGION="$REGION" STACK="$STACK"
-
-      - name: Validate Terraform through Terragrunt
-        shell: bash
-        run: make validate ENV="$ENVIRONMENT" REGION="$REGION" STACK="$STACK"
-
-      - name: Plan Databricks Lakehouse stack
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p logs
-          make plan ENV="$ENVIRONMENT" REGION="$REGION" STACK="$STACK" 2>&1 | tee logs/databricks-lakehouse-infra-plan.log
-
-      - name: Check pipeline Python syntax
-        shell: bash
-        run: python -m py_compile databricks/energy_market/src/energy_market_pipeline.py
-
-      - name: Validate Databricks bundle
-        shell: bash
-        run: make databricks-bundle-validate
-
-      - name: Upload plan logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: databricks-lakehouse-plan-logs
-          path: logs/
-          if-no-files-found: ignore
-
-  deploy-infra:
-    name: Apply or destroy lakehouse stack
-    runs-on: ubuntu-latest
-    needs: validate-and-plan
-    if: github.event_name == 'workflow_dispatch' && (inputs.action == 'apply' || inputs.action == 'destroy')
-    environment: ${{ inputs.environment }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Read tool versions
-        id: tool-versions
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform_version="$(awk '$1 == "terraform" { print $2 }' .tool-versions)"
-          terragrunt_version="$(awk '$1 == "terragrunt" { print $2 }' .tool-versions)"
-
-          if [ -z "$terraform_version" ] || [ -z "$terragrunt_version" ]; then
-            echo "::error::Missing terraform or terragrunt version in .tool-versions"
-            exit 1
-          fi
-
-          echo "terraform=$terraform_version" >> "$GITHUB_OUTPUT"
-          echo "terragrunt=$terragrunt_version" >> "$GITHUB_OUTPUT"
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ inputs.region }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ steps.tool-versions.outputs.terraform }}
-
-      - name: Install Terragrunt
-        shell: bash
-        run: |
-          set -euo pipefail
-          terragrunt_version="${{ steps.tool-versions.outputs.terragrunt }}"
-          curl -fsSL \
-            "https://github.com/gruntwork-io/terragrunt/releases/download/v${terragrunt_version}/terragrunt_linux_amd64" \
-            -o terragrunt
-          chmod +x terragrunt
-          sudo mv terragrunt /usr/local/bin/terragrunt
-          terragrunt --version
-
-      - name: Apply or destroy Databricks Lakehouse stack
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          case "${{ inputs.action }}" in
-            apply)
-              make deploy-ci ENV="${{ inputs.environment }}" REGION="${{ inputs.region }}" STACK="databricks-lakehouse-infra"
-              ;;
-            destroy)
-              make destroy-ci ENV="${{ inputs.environment }}" REGION="${{ inputs.region }}" STACK="databricks-lakehouse-infra"
-              ;;
-            *)
-              echo "::error::Unsupported deploy action: ${{ inputs.action }}"
-              exit 1
-              ;;
-          esac
-
-  bundle:
-    name: Deploy or run Databricks bundle
-    runs-on: ubuntu-latest
-    needs: validate-and-plan
-    if: github.event_name == 'workflow_dispatch' && (inputs.action == 'deploy-bundle' || inputs.action == 'run-pipeline')
-    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -260,7 +57,7 @@ jobs:
             DATABRICKS_CLIENT_SECRET \
             DATABRICKS_HOST; do
             if [ -z "${!name:-}" ]; then
-              echo "::error::$name is not available. Configure it in the ${{ inputs.environment }} GitHub Environment or repository settings."
+              echo "::error::$name is not available. Configure it in the dev GitHub Environment or repository settings."
               exit 1
             fi
           done
@@ -268,11 +65,25 @@ jobs:
       - name: Install Databricks CLI
         uses: databricks/setup-cli@main
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check pipeline Python syntax
+        shell: bash
+        run: python -m py_compile databricks/energy_market/src/energy_market_pipeline.py
+
+      - name: Validate Databricks bundle
+        shell: bash
+        run: make databricks-bundle-validate
+
       - name: Deploy Databricks bundle
+        if: github.event_name == 'workflow_dispatch' && (inputs.action == 'deploy-bundle' || inputs.action == 'run-pipeline')
         shell: bash
         run: make databricks-bundle-deploy
 
       - name: Run Databricks pipeline
-        if: inputs.action == 'run-pipeline'
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'run-pipeline'
         shell: bash
         run: make databricks-bundle-run

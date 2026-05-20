@@ -21,6 +21,7 @@ terraform-state-infra
 account-admin
 network-infra
 uc-metastore-infra
+streaming-lake-infra
 workspace-infra
 ```
 

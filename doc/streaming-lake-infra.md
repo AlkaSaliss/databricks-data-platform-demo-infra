@@ -28,7 +28,7 @@ The raw France energy-grid bronze output is written under:
 s3://<bronze-bucket>/bronze/raw_fr_energy_grid/
 ```
 
-After `databricks-lakehouse-infra` is deployed, Databricks reads the same raw bronze prefix through the Unity Catalog external volume:
+After `workspace-infra` is deployed, Databricks reads the same raw bronze prefix through the Unity Catalog external volume:
 
 ```text
 /Volumes/energy_market_demo/bronze/streaming_lake/bronze/raw_fr_energy_grid/
