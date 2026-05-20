@@ -129,7 +129,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-target/
 PIPFILE.lock
 uv.lock
 

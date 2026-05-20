@@ -1,6 +1,6 @@
 # Streaming Lake Infrastructure
 
-This stack creates the S3 bucket used by local Flink jobs to land bronze streaming output.
+This stack creates the S3 bucket used by local Flink jobs to land streaming lake outputs.
 
 ## Resources
 
@@ -22,8 +22,15 @@ make plan STACK=streaming-lake-infra
 make deploy STACK=streaming-lake-infra
 ```
 
-The initial Flink batch writes raw France energy-grid bronze Parquet files under:
+The raw France energy-grid bronze output is written under:
 
 ```text
 s3://<bronze-bucket>/bronze/raw_fr_energy_grid/
+```
+
+The current local Flink job also derives sibling demo outputs in the same bucket:
+
+```text
+s3://<bronze-bucket>/silver/fr_energy_market_snapshots_15min/
+s3://<bronze-bucket>/gold/fr_energy_market_kpis_hourly/
 ```

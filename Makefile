@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test managed-flink-package managed-flink-start managed-flink-stop managed-flink-status plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -27,9 +27,9 @@ LIVE_DIR := $(SRC_DIR)/live/$(ENV)/$(REGION)
 STACK_DIR := $(LIVE_DIR)/$(STACK)
 PRODUCER_RUNTIME_ARGS := --retry-max-attempts $(RETRY_MAX_ATTEMPTS) --retry-backoff-seconds $(RETRY_BACKOFF_SECONDS) --log-level $(LOG_LEVEL) --log-format $(LOG_FORMAT) $(if $(REQUEST_RATE_LIMIT_PER_SECOND),--request-rate-limit-per-second $(REQUEST_RATE_LIMIT_PER_SECOND),) $(if $(PUBLISH_RATE_LIMIT_PER_SECOND),--publish-rate-limit-per-second $(PUBLISH_RATE_LIMIT_PER_SECOND),)
 
-DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra streaming-lake-infra managed-flink-infra
+DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra streaming-lake-infra
 ACTIVE_DEPLOY_ORDER := account-admin network-infra uc-metastore-infra workspace-infra
-DESTROY_ORDER := managed-flink-infra streaming-lake-infra workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
+DESTROY_ORDER := streaming-lake-infra workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
 ACTIVE_DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin
 
 help: ## Show available commands
@@ -158,31 +158,6 @@ flink-bronze-submit: ## Submit the raw France Kafka-to-S3 bronze PyFlink job to 
 
 flink-test: ## Run Python Flink job tests
 	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m pytest
-
-managed-flink-package: ## Build the Amazon Managed Flink application archive
-	@bash scripts/package-managed-flink.sh
-
-managed-flink-start: ## Start the Amazon Managed Flink application
-	@application_name="$$(cd $(LIVE_DIR)/managed-flink-infra && terragrunt output -raw application_name)" && \
-		aws kinesisanalyticsv2 start-application \
-			--region "$(REGION)" \
-			--application-name "$$application_name" \
-			--run-configuration '{"FlinkRunConfiguration":{"AllowNonRestoredState":true}}'
-
-managed-flink-stop: ## Stop the Amazon Managed Flink application
-	@application_name="$$(cd $(LIVE_DIR)/managed-flink-infra && terragrunt output -raw application_name)" && \
-		aws kinesisanalyticsv2 stop-application \
-			--region "$(REGION)" \
-			--application-name "$$application_name" \
-			--force
-
-managed-flink-status: ## Show the Amazon Managed Flink application status
-	@application_name="$$(cd $(LIVE_DIR)/managed-flink-infra && terragrunt output -raw application_name)" && \
-		aws kinesisanalyticsv2 describe-application \
-			--region "$(REGION)" \
-			--application-name "$$application_name" \
-			--query 'ApplicationDetail.{Name:ApplicationName,Status:ApplicationStatus,Runtime:RuntimeEnvironment,Version:ApplicationVersionId}' \
-			--output table
 
 plan-all: ## Run plan for all stacks in deployment order
 	@for stack in $(DEPLOY_ORDER); do \

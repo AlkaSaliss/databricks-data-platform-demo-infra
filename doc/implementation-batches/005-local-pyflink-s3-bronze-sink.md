@@ -55,7 +55,7 @@ Validate non-secret Flink config:
 make flink-bronze-dry-run-config
 ```
 
-Submit the bronze sink job:
+Submit the Flink job. In this batch it writes bronze only; later batches keep the same target name:
 
 ```bash
 make flink-bronze-submit
@@ -78,7 +78,7 @@ make flink-test
 
 The PyFlink job reads raw Kafka message values as JSON strings, extracts the raw envelope fields, preserves the complete payload and raw event JSON, and writes Parquet records partitioned by `country_code` and `event_date` under `FLINK_S3_BRONZE_URI`.
 
-This batch intentionally lands raw bronze data only. Normalized events, KPI aggregation, alerts, and Databricks ingestion remain follow-up work.
+This batch intentionally landed raw bronze data only when introduced. Batch 008 extends the same local Flink job to also write enriched 15-minute snapshots and hourly KPI rollups while keeping this bronze output backward compatible.
 
 ## Troubleshooting
 
