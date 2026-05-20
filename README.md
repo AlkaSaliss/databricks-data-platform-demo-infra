@@ -3,14 +3,13 @@
 [![PR Infrastructure Checks](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/pr-infra.yml)
 [![Deploy Databricks Demo Workspace Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/deploy-infra.yml)
 [![Confluent Kafka Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml)
-[![Managed Flink Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/managed-flink-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/managed-flink-infra.yml)
 [![Producer Tests](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml)
 
 This repository contains Terraform modules, Terragrunt live stacks, Dockerized producers, and local PyFlink jobs for a Databricks data platform demo on AWS.
 
 ## Stack Overview
 
-The full local deployment order is split across seven stacks under `src/live/<env>/<region>`:
+The active AWS/Databricks deployment is split into six stacks under `src/live/<env>/<region>`:
 
 1. `terraform-state-infra`
 2. `account-admin`
@@ -18,12 +17,8 @@ The full local deployment order is split across seven stacks under `src/live/<en
 4. `uc-metastore-infra`
 5. `workspace-infra`
 6. `streaming-lake-infra`
-7. `managed-flink-infra`
 
 Recommended deployment order is the same as the list above. Destroy order is the reverse.
-
-Only the workspace stacks are part of the active Databricks CI/CD sequence: `account-admin`, `network-infra`, `uc-metastore-infra`, and `workspace-infra`.
-`confluent-kafka-infra`, `streaming-lake-infra`, and `managed-flink-infra` are deployed by independent workflows. The Managed Flink stack is stopped by default to avoid ongoing KPU charges.
 
 ## Repository Layout
 
@@ -33,20 +28,17 @@ Only the workspace stacks are part of the active Databricks CI/CD sequence: `acc
 ├── bin/
 │   ├── set_aws_credentials.sh
 │   └── set_env_vars.sh
-├── apps/
-│   ├── flink/
-│   └── producers/
 ├── doc/
 │   ├── account-admin.md
-│   ├── managed-flink-infra.md
 │   ├── network-infra.md
 │   ├── streaming-lake-infra.md
 │   ├── terraform-state-infra.md
 │   ├── uc-metastore-infra.md
 │   └── workspace-infra.md
-├── scripts/
-│   ├── generate-ci-tfvars.sh
-│   └── package-managed-flink.sh
+└── src/
+├── apps/
+│   ├── flink/
+│   └── producers/
 └── src/
     ├── live/
     │   └── dev/
@@ -57,7 +49,6 @@ Only the workspace stacks are part of the active Databricks CI/CD sequence: `acc
     │           ├── terraform-state-infra/
     │           ├── uc-metastore-infra/
     │           ├── workspace-infra/
-    │           ├── managed-flink-infra/
     │           └── region.hcl
     ├── modules/
     └── root.hcl
@@ -111,13 +102,13 @@ make deploy STACK=workspace-infra
 # Destroy one stack
 make destroy STACK=workspace-infra
 
-# Run the full local deployment sequence, including optional Managed Flink
+# Run the full deployment sequence for one environment/region
 make deploy-all ENV=dev REGION=eu-west-1
 
-# Run the active Databricks CI/CD deployment sequence
+# Run the active CI/CD deployment sequence, excluding terraform-state-infra
 make deploy-active-all ENV=dev REGION=eu-west-1
 
-# Destroy the active Databricks CI/CD stacks in reverse order
+# Destroy the active CI/CD stacks in reverse order, excluding terraform-state-infra
 make destroy-active-all ENV=dev REGION=eu-west-1
 ```
 
@@ -263,40 +254,6 @@ python3 -m pip install -e "./apps/flink/energy_market[test]"
 make flink-test
 ```
 
-## Amazon Managed Flink Bronze Sink
-
-The `managed-flink-infra` stack deploys the same raw France energy-grid bronze sink on Amazon Managed Service for Apache Flink.
-
-Build the application archive before planning or deploying:
-
-```bash
-make managed-flink-package
-```
-
-Deploy the required Kafka and bronze S3 dependencies first:
-
-```bash
-make deploy STACK=confluent-kafka-infra
-make deploy STACK=streaming-lake-infra
-```
-
-Plan and deploy the Managed Flink stack:
-
-```bash
-make plan STACK=managed-flink-infra
-make deploy STACK=managed-flink-infra
-```
-
-The live stack sets `start_application = false`, so the application is created but not running. Start it only for a demo window, then stop it to avoid ongoing KPU charges:
-
-```bash
-make managed-flink-start
-make managed-flink-status
-make managed-flink-stop
-```
-
-To validate end to end, start the app, publish events with `make kafka-producer-docker-run LAST_DAYS=1`, confirm the app is `RUNNING`, and check for Parquet output under the existing `raw_fr_energy_grid_bronze_uri` S3 prefix.
-
 ## GitHub Actions CI/CD
 
 The repository uses these GitHub Actions workflows:
@@ -305,7 +262,6 @@ The repository uses these GitHub Actions workflows:
 - `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
 - `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
 - `.github/workflows/streaming-lake-infra.yml` runs independent S3 bronze bucket validation, planning, and manual deployment.
-- `.github/workflows/managed-flink-infra.yml` builds the PyFlink package, then validates, plans, and manually deploys or destroys the optional Managed Flink stack.
 - `.github/workflows/producer-tests.yml` runs producer unit tests, Docker producer dry-runs, Docker image validation, and Flink job unit tests without publishing to Kafka.
 
 The AWS/Databricks workflows target the active workspace stacks sequentially for `dev/eu-west-1`:
@@ -319,35 +275,26 @@ The AWS/Databricks workflows target the active workspace stacks sequentially for
 Active workspace destroys run in reverse order: `workspace-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
 
 `streaming-lake-infra` is deployed by the separate Streaming Lake workflow because it only needs AWS credentials and should not depend on Databricks CI secrets.
-`managed-flink-infra` is deployed by the separate Managed Flink workflow because it builds a PyFlink artifact and depends on Kafka and streaming-lake outputs.
-`confluent-kafka-infra` is deployed by the separate Confluent Kafka workflow because it needs Confluent Cloud credentials.
 
 ### GitHub Variables And Secrets
 
-The workflows read configuration from the `dev` GitHub Environment.
+Both workflows read configuration from the `dev` GitHub Environment.
 Configure required reviewers on that environment if PR planning and manual applies should wait for approval.
+The workflow uses AWS credentials configured in GitHub secrets.
 
-All infrastructure workflows require these GitHub secrets:
+Configure these GitHub secrets:
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
-
-Optional AWS secret:
-
-- `AWS_SESSION_TOKEN`
-
-The Databricks workspace workflows also require these GitHub secrets:
-
 - `DATABRICKS_ACCOUNT_ID`
 - `DATABRICKS_CLIENT_ID`
 - `DATABRICKS_CLIENT_SECRET`
 
-The Confluent Kafka workflow also requires these GitHub secrets:
+Optional secret:
 
-- `CONFLUENT_CLOUD_API_KEY`
-- `CONFLUENT_CLOUD_API_SECRET`
+- `AWS_SESSION_TOKEN`
 
-Configure these GitHub variables for the Databricks workspace workflows:
+Configure these GitHub variables:
 
 - `DATABRICKS_OWNER_EMAIL`
 - `DATABRICKS_ACCOUNT_ADMINS_JSON`
@@ -374,9 +321,9 @@ JSON variables must be valid JSON values because the workflow writes `terraform.
 }
 ```
 
-`TF_STATE_BUCKET` and `TF_STATE_DYNAMODB_TABLE` are not required by the workflows because the state bootstrap stack is excluded.
+`TF_STATE_BUCKET` and `TF_STATE_DYNAMODB_TABLE` are not required by the workflow because the state bootstrap stack is excluded.
 Network, metastore, and workspace names are defined directly in the tracked Terragrunt stack definitions under `src/live/dev/eu-west-1`.
-The Databricks workspace workflows generate runtime `terraform.tfvars.json` files with `scripts/generate-ci-tfvars.sh`.
+The workflows generate runtime `terraform.tfvars.json` files with `scripts/generate-ci-tfvars.sh`.
 
 ### Pull Request Checks
 
@@ -399,8 +346,6 @@ Use `action=destroy` to run validation and planning first, then wait for the `de
 
 For the S3 bronze bucket, open **Actions** > **Streaming Lake Infrastructure** > **Run workflow** and choose `plan`, `apply`, or `destroy`.
 
-For the optional Managed Flink bronze sink, open **Actions** > **Managed Flink Infrastructure** > **Run workflow** and choose `plan`, `apply`, or `destroy`. The workflow builds the application archive before planning or applying, and the deployed app remains stopped unless the Terragrunt input `start_application` is changed.
-
 ## Stack Documentation
 
 - [account-admin](./doc/account-admin.md)
@@ -409,4 +354,3 @@ For the optional Managed Flink bronze sink, open **Actions** > **Managed Flink I
 - [uc-metastore-infra](./doc/uc-metastore-infra.md)
 - [workspace-infra](./doc/workspace-infra.md)
 - [streaming-lake-infra](./doc/streaming-lake-infra.md)
-- [managed-flink-infra](./doc/managed-flink-infra.md)
