@@ -170,27 +170,38 @@ jobs:
           set -euo pipefail
 
           if [ -n "${DATABRICKS_HOST:-}" ]; then
-            host="$DATABRICKS_HOST"
+            workspace_url="$DATABRICKS_HOST"
           else
-            workspace_url="$(
+            raw_workspace_output="$(
               cd "src/live/$ENVIRONMENT/$REGION/workspace-infra" &&
               terragrunt output -raw databricks_workspace_url 2>/dev/null || true
+            )"
+
+            workspace_url="$(
+              printf '%s\n' "$raw_workspace_output" |
+              awk '
+                /^[[:space:]]*(https:\/\/)?[A-Za-z0-9.-]+(\.cloud\.databricks\.com|\.azuredatabricks\.net)/ {
+                  gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+                  print
+                  exit
+                }
+              '
             )"
 
             if [ -z "$workspace_url" ]; then
               echo "::error::DATABRICKS_HOST is not configured and workspace-infra has no databricks_workspace_url output yet."
               exit 1
             fi
-
-            if [[ "$workspace_url" == https://* ]]; then
-              host="$workspace_url"
-            else
-              host="https://$workspace_url"
-            fi
           fi
 
-          echo "DATABRICKS_HOST=$host" >> "$GITHUB_ENV"
-          echo "databricks_host=$host" >> "$GITHUB_OUTPUT"
+          if [[ "$workspace_url" == https://* ]]; then
+            host="$workspace_url"
+          else
+            host="https://$workspace_url"
+          fi
+
+          printf 'DATABRICKS_HOST=%s\n' "$host" >> "$GITHUB_ENV"
+          printf 'databricks_host=%s\n' "$host" >> "$GITHUB_OUTPUT"
 
       - name: Validate Databricks bundle
         if: inputs.action != 'destroy'
