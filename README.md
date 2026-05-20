@@ -296,10 +296,9 @@ make flink-test
 The repository uses these GitHub Actions workflows:
 
 - `.github/workflows/pr-infra.yml` runs validation and planning for the active AWS/Databricks stacks on pull requests.
-- `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
+- `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit and can deploy or run the Databricks Asset Bundle.
 - `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
 - `.github/workflows/streaming-lake-infra.yml` runs independent S3 bronze bucket validation, planning, and manual deployment.
-- `.github/workflows/databricks-lakehouse.yml` validates, deploys, and runs the Databricks Asset Bundle.
 - `.github/workflows/producer-tests.yml` runs producer unit tests, Docker producer dry-runs, Docker image validation, and Flink job unit tests without publishing to Kafka.
 
 The AWS/Databricks workflows target the active workspace stacks sequentially for `dev/eu-west-1`:
@@ -373,6 +372,7 @@ The PR workflow runs:
 - `make hcl-validate-active-all ENV=dev REGION=eu-west-1`
 - `make validate-active-all ENV=dev REGION=eu-west-1`
 - `make plan-active-all ENV=dev REGION=eu-west-1`
+- `make databricks-bundle-validate`
 
 Plan logs are uploaded as GitHub Actions artifacts.
 
@@ -383,14 +383,10 @@ From GitHub, open **Actions** > **Deploy Databricks Demo Workspace Infrastructur
 Use `action=plan` to run validation and planning only.
 Use `action=apply` to run validation and planning first, then wait for the `dev` Environment approval before applying the active stacks sequentially.
 Use `action=destroy` to run validation and planning first, then wait for the `dev` Environment approval before destroying the active stacks in reverse order.
+Use `action=deploy-bundle` to validate infra and deploy the Databricks Asset Bundle.
+Use `action=run-pipeline` to validate infra, deploy the bundle, and run `energy_market_pipeline`.
 
 For the S3 bronze bucket, open **Actions** > **Streaming Lake Infrastructure** > **Run workflow** and choose `plan`, `apply`, or `destroy`.
-
-For the DAB pipeline, open **Actions** > **Databricks Lakehouse Pipeline** > **Run workflow** and choose:
-
-- `validate-bundle` to validate the Databricks Asset Bundle.
-- `deploy-bundle` to deploy the Databricks Asset Bundle.
-- `run-pipeline` to deploy the bundle and run `energy_market_pipeline`.
 
 ## Stack Documentation
 
