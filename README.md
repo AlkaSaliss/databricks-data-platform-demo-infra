@@ -348,6 +348,8 @@ Optional variables:
 - `CREATE_AUTOMATION_SERVICE_PRINCIPAL`
 - `AUTOMATION_SERVICE_PRINCIPAL_NAME`
 
+`DATABRICKS_HOST` is optional after `workspace-infra` has been deployed; the workflows can resolve it from the `databricks_workspace_url` Terraform output. Setting it explicitly is still useful for bundle-only runs and clearer diagnostics.
+
 JSON variables must be valid JSON values because the workflow writes `terraform.tfvars.json`. Compact single-line JSON is recommended for GitHub variables, for example:
 
 ```json

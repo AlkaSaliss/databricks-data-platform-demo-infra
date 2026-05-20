@@ -41,6 +41,8 @@ jobs:
     name: Validate and plan active stacks
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    outputs:
+      databricks_host: ${{ steps.resolve-databricks-host.outputs.databricks_host }}
     env:
       ENVIRONMENT: ${{ inputs.environment }}
       REGION: ${{ inputs.region }}
@@ -91,7 +93,6 @@ jobs:
             DATABRICKS_ACCOUNT_ID \
             DATABRICKS_CLIENT_ID \
             DATABRICKS_CLIENT_SECRET \
-            DATABRICKS_HOST \
             DATABRICKS_OWNER_EMAIL \
             DATABRICKS_ACCOUNT_ADMINS_JSON; do
             if [ -z "${!name:-}" ]; then
@@ -160,6 +161,36 @@ jobs:
         if: inputs.action != 'destroy'
         shell: bash
         run: python -m py_compile databricks/energy_market/src/energy_market_pipeline.py
+
+      - name: Resolve Databricks workspace host
+        id: resolve-databricks-host
+        if: inputs.action != 'destroy'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -n "${DATABRICKS_HOST:-}" ]; then
+            host="$DATABRICKS_HOST"
+          else
+            workspace_url="$(
+              cd "src/live/$ENVIRONMENT/$REGION/workspace-infra" &&
+              terragrunt output -raw databricks_workspace_url 2>/dev/null || true
+            )"
+
+            if [ -z "$workspace_url" ]; then
+              echo "::error::DATABRICKS_HOST is not configured and workspace-infra has no databricks_workspace_url output yet."
+              exit 1
+            fi
+
+            if [[ "$workspace_url" == https://* ]]; then
+              host="$workspace_url"
+            else
+              host="https://$workspace_url"
+            fi
+          fi
+
+          echo "DATABRICKS_HOST=$host" >> "$GITHUB_ENV"
+          echo "databricks_host=$host" >> "$GITHUB_OUTPUT"
 
       - name: Validate Databricks bundle
         if: inputs.action != 'destroy'
@@ -275,7 +306,7 @@ jobs:
     env:
       DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
       DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST != '' && vars.DATABRICKS_HOST || needs.plan.outputs.databricks_host }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -74,7 +74,6 @@ jobs:
             DATABRICKS_ACCOUNT_ID \
             DATABRICKS_CLIENT_ID \
             DATABRICKS_CLIENT_SECRET \
-            DATABRICKS_HOST \
             DATABRICKS_OWNER_EMAIL \
             DATABRICKS_ACCOUNT_ADMINS_JSON; do
             if [ -z "${!name:-}" ]; then
@@ -142,6 +141,33 @@ jobs:
       - name: Check pipeline Python syntax
         shell: bash
         run: python -m py_compile databricks/energy_market/src/energy_market_pipeline.py
+
+      - name: Resolve Databricks workspace host
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -n "${DATABRICKS_HOST:-}" ]; then
+            host="$DATABRICKS_HOST"
+          else
+            workspace_url="$(
+              cd "src/live/$ENVIRONMENT/$REGION/workspace-infra" &&
+              terragrunt output -raw databricks_workspace_url 2>/dev/null || true
+            )"
+
+            if [ -z "$workspace_url" ]; then
+              echo "::error::DATABRICKS_HOST is not configured and workspace-infra has no databricks_workspace_url output yet."
+              exit 1
+            fi
+
+            if [[ "$workspace_url" == https://* ]]; then
+              host="$workspace_url"
+            else
+              host="https://$workspace_url"
+            fi
+          fi
+
+          echo "DATABRICKS_HOST=$host" >> "$GITHUB_ENV"
 
       - name: Validate Databricks bundle
         shell: bash
