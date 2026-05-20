@@ -211,7 +211,7 @@ python3 -m pip install -e "./apps/producers/energy_market[test]"
 make producer-test
 ```
 
-## Local PyFlink Bronze Sink
+## Local PyFlink Energy Processing
 
 After deploying `confluent-kafka-infra` and `streaming-lake-infra`, export Flink Kafka and S3 settings:
 
@@ -230,7 +230,7 @@ make flink-docker-build
 make flink-bronze-dry-run-config
 ```
 
-Submit the Kafka-to-S3 bronze sink job:
+Submit the local Flink job. The target name is kept for compatibility, but the job now writes bronze, enriched snapshot, and hourly KPI outputs:
 
 ```bash
 make flink-bronze-submit
@@ -245,7 +245,14 @@ In another shell with producer variables exported, publish events:
 make kafka-producer-docker-run LAST_DAYS=1
 ```
 
-The job writes raw France energy-grid bronze Parquet files under `FLINK_S3_BRONZE_URI`, partitioned by `country_code` and `event_date`.
+The job writes raw France energy-grid bronze Parquet files under `FLINK_S3_BRONZE_URI`, partitioned by `country_code` and `event_date`. It also writes two demo-ready datasets in the same streaming lake bucket:
+
+- enriched 15-minute snapshots under `silver/fr_energy_market_snapshots_15min`
+- hourly trend KPIs under `gold/fr_energy_market_kpis_hourly`
+
+The enriched snapshot output keeps the demo intentionally compact: demand, forecast, forecast error, total generation, renewable/fossil share, CO2 intensity, and simple quality status. The hourly output aggregates those snapshots with average demand, peak demand, renewable share, CO2 intensity, forecast error, record counts, invalid counts, and a simple market stress label.
+
+The Kafka source starts from committed consumer-group offsets and falls back to the earliest offset only for a new group. This keeps local Docker restarts from replaying the whole topic after Flink has checkpointed and committed progress for `FLINK_KAFKA_GROUP_ID`; leave the job running for at least one checkpoint after consumption before stopping it.
 
 Run Flink job unit tests directly when changing job internals:
 

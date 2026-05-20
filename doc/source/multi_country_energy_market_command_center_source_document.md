@@ -126,7 +126,7 @@ The first version of the project does not aim to:
 - implement real-time trading features
 - ingest private customer or billing data
 - implement enterprise authentication end to end
-- deploy all components on AWS Managed Services from day one
+- deploy all components on cloud-hosted services from day one
 - implement full Collibra integration
 - build advanced ML forecasting as the core deliverable
 
@@ -285,7 +285,7 @@ Source APIs
 Kafka / Confluent Cloud / Amazon MSK
    |
    v
-Amazon Managed Service for Apache Flink
+Apache Flink runtime
    |
    v
 Amazon S3
@@ -1463,4 +1463,3 @@ It positions the candidate as a lead data/platform engineer capable of owning ar
 ## 29. Final Positioning Statement
 
 > I built this demo to reflect the challenges of a global energy data platform: heterogeneous country-level sources, streaming ingestion, real-time processing, a reusable core data model, governed lakehouse layers, and business-ready dashboards. The same pattern can be extended from public energy-market data to internal B2C domains such as customers, contracts, consumption, billing, and customer operations.
-
