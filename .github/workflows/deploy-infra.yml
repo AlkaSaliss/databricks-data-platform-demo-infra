@@ -164,7 +164,7 @@ jobs:
 
       - name: Resolve Databricks workspace host
         id: resolve-databricks-host
-        if: inputs.action != 'destroy'
+        if: inputs.action == 'deploy-bundle' || inputs.action == 'run-pipeline'
         shell: bash
         run: |
           set -euo pipefail
@@ -204,7 +204,7 @@ jobs:
           printf 'databricks_host=%s\n' "$host" >> "$GITHUB_OUTPUT"
 
       - name: Validate Databricks bundle
-        if: inputs.action != 'destroy'
+        if: inputs.action == 'deploy-bundle' || inputs.action == 'run-pipeline'
         shell: bash
         run: make databricks-bundle-validate
 

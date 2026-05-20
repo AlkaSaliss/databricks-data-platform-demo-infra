@@ -374,7 +374,7 @@ The PR workflow runs:
 - `make hcl-validate-active-all ENV=dev REGION=eu-west-1`
 - `make validate-active-all ENV=dev REGION=eu-west-1`
 - `make plan-active-all ENV=dev REGION=eu-west-1`
-- `make databricks-bundle-validate`
+- Python syntax validation for the Databricks Lakeflow pipeline
 
 Plan logs are uploaded as GitHub Actions artifacts.
 
