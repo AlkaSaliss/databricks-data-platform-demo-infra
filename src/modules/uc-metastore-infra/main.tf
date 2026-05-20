@@ -142,6 +142,11 @@ resource "aws_iam_role" "metastore_data_access" {
   })
 }
 
+resource "time_sleep" "wait_for_iam_propagation" {
+  depends_on      = [aws_iam_role.metastore_data_access]
+  create_duration = "30s"
+}
+
 resource "databricks_metastore" "this" {
   provider      = databricks.mws
   name          = local.metastore_name
@@ -149,4 +154,17 @@ resource "databricks_metastore" "this" {
   owner         = var.unity_metastore_owner
   storage_root  = "s3://${aws_s3_bucket.metastore.id}/metastore"
   force_destroy = true
+}
+
+resource "databricks_metastore_data_access" "default" {
+  provider     = databricks.mws
+  metastore_id = databricks_metastore.this.id
+  name         = "${var.prefix}-metastore-root-access"
+  is_default   = true
+
+  aws_iam_role {
+    role_arn = aws_iam_role.metastore_data_access.arn
+  }
+
+  depends_on = [time_sleep.wait_for_iam_propagation]
 }

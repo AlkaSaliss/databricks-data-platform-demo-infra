@@ -8,6 +8,11 @@ output "unity_catalog_iam_role_arn" {
   description = "Unity Catalog metastore data access IAM role ARN"
 }
 
+output "metastore_data_access_name" {
+  value       = databricks_metastore_data_access.default.name
+  description = "Default Unity Catalog metastore data access credential name"
+}
+
 output "metastore_id" {
   value       = databricks_metastore.this.id
   description = "Unity Catalog metastore ID"
