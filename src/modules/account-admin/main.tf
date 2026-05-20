@@ -5,6 +5,11 @@ data "databricks_user" "owner" {
   provider  = databricks.mws
 }
 
+data "databricks_service_principal" "terraform_sp" {
+  provider       = databricks.mws
+  application_id = var.databricks_client_id
+}
+
 # Create users at account level (not workspace level)
 # This includes both regular users and account admins
 resource "databricks_user" "unity_users" {
@@ -44,6 +49,12 @@ resource "databricks_group_member" "add_account_owner_to_admin_group" {
   # member_id = databricks_user.owner.id
 }
 
+resource "databricks_group_member" "terraform_sp_admin" {
+  provider  = databricks.mws
+  group_id  = databricks_group.admin_group.id
+  member_id = data.databricks_service_principal.terraform_sp.id
+}
+
 # Assign account admin role to specified users
 # This is a prerequisite for creating metastores
 resource "databricks_user_role" "account_admin_role" {
@@ -51,6 +62,18 @@ resource "databricks_user_role" "account_admin_role" {
   for_each = toset(var.databricks_account_admins)
   user_id  = databricks_user.unity_users[each.value].id
   role     = "account_admin"
+}
+
+resource "databricks_group_role" "admin_group_account_admin" {
+  provider = databricks.mws
+  group_id = databricks_group.admin_group.id
+  role     = "account_admin"
+}
+
+resource "databricks_service_principal_role" "terraform_sp_account_admin" {
+  provider             = databricks.mws
+  service_principal_id = data.databricks_service_principal.terraform_sp.id
+  role                 = "account_admin"
 }
 
 # Optional: Create additional groups for regular users

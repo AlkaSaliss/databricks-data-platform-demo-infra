@@ -25,6 +25,7 @@ Deploy these first:
 - Databricks workspace
 - Metastore assignment
 - Workspace permission assignments for admins and users
+- Workspace admin access for the Unity Catalog admin group created by `account-admin`
 - Catalog `energy_market_demo`
 - Schemas `bronze`, `silver`, and `gold`
 - IAM role and read-only Unity Catalog storage credential for the streaming lake bucket
