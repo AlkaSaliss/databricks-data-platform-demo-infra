@@ -23,5 +23,5 @@ inputs = {
   databricks_account_id    = include.env.locals.databricks_account_id
   databricks_client_id     = include.env.locals.databricks_client_id
   databricks_client_secret = include.env.locals.databricks_client_secret
-  unity_metastore_owner    = include.env.locals.databricks_owner_email
+  unity_metastore_owner    = include.env.locals.databricks_client_id
 }

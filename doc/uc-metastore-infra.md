@@ -13,6 +13,8 @@ This stack creates the Unity Catalog metastore resources shared by workspaces.
 - IAM role and policies for Unity Catalog data access
 - Databricks metastore
 
+The metastore owner is the Terraform Databricks service principal identified by `DATABRICKS_CLIENT_ID`. That principal later creates workspace-level Unity Catalog objects in `workspace-infra`, so it must have metastore-owner privileges such as `CREATE CATALOG`, `CREATE STORAGE CREDENTIAL`, and `CREATE EXTERNAL LOCATION`.
+
 ## Required Environment Variables
 
 - `DATABRICKS_ACCOUNT_ID`
