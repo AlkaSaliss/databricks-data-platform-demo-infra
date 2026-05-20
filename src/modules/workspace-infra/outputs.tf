@@ -22,8 +22,8 @@ output "databricks_workspace_url" {
 }
 
 output "databricks_host" {
-  value       = databricks_mws_workspaces.this.workspace_url
-  description = "Databricks workspace host URL"
+  value       = local.databricks_workspace_host
+  description = "Databricks workspace host URL, including https://."
 }
 
 output "lakehouse_catalog_name" {
