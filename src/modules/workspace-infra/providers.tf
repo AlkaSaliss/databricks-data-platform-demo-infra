@@ -9,7 +9,8 @@
 # for Unity Catalog workspace objects such as catalogs, schemas, and volumes.
 
 provider "databricks" {
-  host          = "https://${databricks_mws_workspaces.this.workspace_url}"
+  host          = local.databricks_workspace_host
   client_id     = var.databricks_client_id
   client_secret = var.databricks_client_secret
+  auth_type     = "oauth-m2m"
 }

@@ -153,12 +153,14 @@ resource "databricks_mws_permission_assignment" "assign_ws_users" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  lakehouse_prefix         = coalesce(var.lakehouse_prefix, var.prefix)
-  streaming_lake_role_name = "${local.lakehouse_prefix}-uc-streaming-lake-access"
-  streaming_lake_role_arn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.streaming_lake_role_name}"
-  storage_credential_name  = replace("${local.lakehouse_prefix}-streaming-lake", "-", "_")
-  external_location_name   = replace("${local.lakehouse_prefix}-streaming-lake", "-", "_")
-  external_location_url    = "s3://${var.streaming_lake_bucket_name}/"
+  databricks_workspace_url  = databricks_mws_workspaces.this.workspace_url
+  databricks_workspace_host = startswith(local.databricks_workspace_url, "https://") ? local.databricks_workspace_url : "https://${local.databricks_workspace_url}"
+  lakehouse_prefix          = coalesce(var.lakehouse_prefix, var.prefix)
+  streaming_lake_role_name  = "${local.lakehouse_prefix}-uc-streaming-lake-access"
+  streaming_lake_role_arn   = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.streaming_lake_role_name}"
+  storage_credential_name   = replace("${local.lakehouse_prefix}-streaming-lake", "-", "_")
+  external_location_name    = replace("${local.lakehouse_prefix}-streaming-lake", "-", "_")
+  external_location_url     = "s3://${var.streaming_lake_bucket_name}/"
 }
 
 resource "databricks_catalog" "energy_market" {
