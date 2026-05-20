@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test databricks-bundle-validate databricks-bundle-deploy databricks-bundle-run plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -23,13 +23,14 @@ LOG_FORMAT ?= json
 SRC_DIR := src
 ENERGY_PRODUCER_APP_DIR := apps/producers/energy_market
 ENERGY_FLINK_APP_DIR := apps/flink/energy_market
+DATABRICKS_BUNDLE_DIR := databricks/energy_market
 LIVE_DIR := $(SRC_DIR)/live/$(ENV)/$(REGION)
 STACK_DIR := $(LIVE_DIR)/$(STACK)
 PRODUCER_RUNTIME_ARGS := --retry-max-attempts $(RETRY_MAX_ATTEMPTS) --retry-backoff-seconds $(RETRY_BACKOFF_SECONDS) --log-level $(LOG_LEVEL) --log-format $(LOG_FORMAT) $(if $(REQUEST_RATE_LIMIT_PER_SECOND),--request-rate-limit-per-second $(REQUEST_RATE_LIMIT_PER_SECOND),) $(if $(PUBLISH_RATE_LIMIT_PER_SECOND),--publish-rate-limit-per-second $(PUBLISH_RATE_LIMIT_PER_SECOND),)
 
-DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra streaming-lake-infra
+DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra workspace-infra streaming-lake-infra databricks-lakehouse-infra
 ACTIVE_DEPLOY_ORDER := account-admin network-infra uc-metastore-infra workspace-infra
-DESTROY_ORDER := streaming-lake-infra workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
+DESTROY_ORDER := databricks-lakehouse-infra streaming-lake-infra workspace-infra uc-metastore-infra network-infra account-admin terraform-state-infra
 ACTIVE_DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin
 
 help: ## Show available commands
@@ -158,6 +159,15 @@ flink-bronze-submit: ## Submit the raw France Kafka-to-S3 bronze PyFlink job to 
 
 flink-test: ## Run Python Flink job tests
 	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m pytest
+
+databricks-bundle-validate: ## Validate the Databricks Asset Bundle for the energy market pipeline
+	@cd $(DATABRICKS_BUNDLE_DIR) && databricks bundle validate -t dev
+
+databricks-bundle-deploy: ## Deploy the Databricks Asset Bundle for the energy market pipeline
+	@cd $(DATABRICKS_BUNDLE_DIR) && databricks bundle deploy -t dev
+
+databricks-bundle-run: ## Run the Lakeflow pipeline from the Databricks Asset Bundle
+	@cd $(DATABRICKS_BUNDLE_DIR) && databricks bundle run -t dev energy_market_pipeline
 
 plan-all: ## Run plan for all stacks in deployment order
 	@for stack in $(DEPLOY_ORDER); do \

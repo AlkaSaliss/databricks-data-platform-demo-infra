@@ -5,11 +5,11 @@
 [![Confluent Kafka Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml)
 [![Producer Tests](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml)
 
-This repository contains Terraform modules, Terragrunt live stacks, Dockerized producers, and local PyFlink jobs for a Databricks data platform demo on AWS.
+This repository contains Terraform modules, Terragrunt live stacks, Dockerized producers, local PyFlink jobs, and a Databricks Asset Bundle for a Databricks data platform demo on AWS.
 
 ## Stack Overview
 
-The active AWS/Databricks deployment is split into six stacks under `src/live/<env>/<region>`:
+The active AWS/Databricks deployment is split into seven stacks under `src/live/<env>/<region>`:
 
 1. `terraform-state-infra`
 2. `account-admin`
@@ -17,6 +17,7 @@ The active AWS/Databricks deployment is split into six stacks under `src/live/<e
 4. `uc-metastore-infra`
 5. `workspace-infra`
 6. `streaming-lake-infra`
+7. `databricks-lakehouse-infra`
 
 Recommended deployment order is the same as the list above. Destroy order is the reverse.
 
@@ -28,14 +29,16 @@ Recommended deployment order is the same as the list above. Destroy order is the
 ├── bin/
 │   ├── set_aws_credentials.sh
 │   └── set_env_vars.sh
+├── databricks/
+│   └── energy_market/
 ├── doc/
 │   ├── account-admin.md
+│   ├── databricks-lakehouse-infra.md
 │   ├── network-infra.md
 │   ├── streaming-lake-infra.md
 │   ├── terraform-state-infra.md
 │   ├── uc-metastore-infra.md
 │   └── workspace-infra.md
-└── src/
 ├── apps/
 │   ├── flink/
 │   └── producers/
@@ -45,7 +48,9 @@ Recommended deployment order is the same as the list above. Destroy order is the
     │       ├── env.hcl
     │       └── eu-west-1/
     │           ├── account-admin/
+    │           ├── databricks-lakehouse-infra/
     │           ├── network-infra/
+    │           ├── streaming-lake-infra/
     │           ├── terraform-state-infra/
     │           ├── uc-metastore-infra/
     │           ├── workspace-infra/
@@ -153,6 +158,34 @@ make deploy STACK=streaming-lake-infra
 ```
 
 Its `raw_fr_energy_grid_bronze_uri` output is exported by `bin/set_flink_output_vars.sh` and used as `FLINK_S3_BRONZE_URI`.
+
+## Databricks Lakehouse And DAB
+
+Deploy `databricks-lakehouse-infra` after the workspace and streaming lake stacks:
+
+```bash
+make deploy STACK=databricks-lakehouse-infra
+```
+
+This creates the Unity Catalog namespace and exposes the streaming lake bucket as:
+
+```text
+/Volumes/energy_market_demo/bronze/streaming_lake
+```
+
+The Databricks Asset Bundle under `databricks/energy_market` defines a serverless Lakeflow Declarative Pipeline. It reads only the raw Flink bronze files through Auto Loader, then creates:
+
+- `energy_market_demo.bronze.raw_fr_energy_grid`
+- `energy_market_demo.silver.fr_energy_market_snapshots_15min`
+- `energy_market_demo.gold.fr_energy_market_kpis_daily`
+
+Run the bundle with existing Databricks CLI authentication:
+
+```bash
+make databricks-bundle-validate
+make databricks-bundle-deploy
+make databricks-bundle-run
+```
 
 ## Docker Kafka Producer
 
@@ -269,6 +302,7 @@ The repository uses these GitHub Actions workflows:
 - `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
 - `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
 - `.github/workflows/streaming-lake-infra.yml` runs independent S3 bronze bucket validation, planning, and manual deployment.
+- `.github/workflows/databricks-lakehouse.yml` runs independent Databricks lakehouse validation, planning, bundle validation, and manual deployment/run actions.
 - `.github/workflows/producer-tests.yml` runs producer unit tests, Docker producer dry-runs, Docker image validation, and Flink job unit tests without publishing to Kafka.
 
 The AWS/Databricks workflows target the active workspace stacks sequentially for `dev/eu-west-1`:
@@ -282,6 +316,7 @@ The AWS/Databricks workflows target the active workspace stacks sequentially for
 Active workspace destroys run in reverse order: `workspace-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
 
 `streaming-lake-infra` is deployed by the separate Streaming Lake workflow because it only needs AWS credentials and should not depend on Databricks CI secrets.
+`databricks-lakehouse-infra` is deployed after `streaming-lake-infra` when running `make deploy-all`, or directly with `make deploy STACK=databricks-lakehouse-infra`.
 
 ### GitHub Variables And Secrets
 
@@ -304,6 +339,7 @@ Optional secret:
 Configure these GitHub variables:
 
 - `DATABRICKS_OWNER_EMAIL`
+- `DATABRICKS_HOST`
 - `DATABRICKS_ACCOUNT_ADMINS_JSON`
 - `DATABRICKS_USERS_JSON`
 - `WORKSPACE_USERS_JSON`
@@ -353,6 +389,13 @@ Use `action=destroy` to run validation and planning first, then wait for the `de
 
 For the S3 bronze bucket, open **Actions** > **Streaming Lake Infrastructure** > **Run workflow** and choose `plan`, `apply`, or `destroy`.
 
+For the Databricks lakehouse objects and DAB pipeline, open **Actions** > **Databricks Lakehouse Pipeline** > **Run workflow** and choose:
+
+- `plan` to validate and plan the `databricks-lakehouse-infra` stack and validate the bundle.
+- `apply` or `destroy` to apply or destroy the lakehouse stack.
+- `deploy-bundle` to deploy the Databricks Asset Bundle.
+- `run-pipeline` to deploy the bundle and run `energy_market_pipeline`.
+
 ## Stack Documentation
 
 - [account-admin](./doc/account-admin.md)
@@ -361,3 +404,4 @@ For the S3 bronze bucket, open **Actions** > **Streaming Lake Infrastructure** >
 - [uc-metastore-infra](./doc/uc-metastore-infra.md)
 - [workspace-infra](./doc/workspace-infra.md)
 - [streaming-lake-infra](./doc/streaming-lake-infra.md)
+- [databricks-lakehouse-infra](./doc/databricks-lakehouse-infra.md)
