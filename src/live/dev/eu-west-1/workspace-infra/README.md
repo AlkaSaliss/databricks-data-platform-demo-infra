@@ -1,6 +1,6 @@
 # workspace-infra Live Stack
 
-This directory contains the Terragrunt live stack for deploying the Databricks workspace in `dev / eu-west-1`.
+This directory contains the Terragrunt live stack for deploying the Databricks workspace and demo lakehouse objects in `dev / eu-west-1`.
 
 ## Dependencies
 
@@ -10,6 +10,7 @@ Deploy these stacks first:
 2. `account-admin`
 3. `network-infra`
 4. `uc-metastore-infra`
+5. `streaming-lake-infra`
 
 ## Required Environment Variables
 

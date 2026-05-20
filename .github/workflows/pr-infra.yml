@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/**"
       - "Makefile"
+      - "databricks/**"
       - "scripts/**"
       - "src/**"
       - "doc/**"
@@ -27,6 +28,7 @@ env:
   DATABRICKS_ACCOUNT_ID: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
   DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
   DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+  DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
   DATABRICKS_OWNER_EMAIL: ${{ vars.DATABRICKS_OWNER_EMAIL }}
   DATABRICKS_ACCOUNT_ADMINS_JSON: ${{ vars.DATABRICKS_ACCOUNT_ADMINS_JSON }}
   DATABRICKS_USERS_JSON: ${{ vars.DATABRICKS_USERS_JSON }}
@@ -105,6 +107,14 @@ jobs:
           sudo mv terragrunt /usr/local/bin/terragrunt
           terragrunt --version
 
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Generate stack tfvars
         shell: bash
         run: scripts/generate-ci-tfvars.sh "$ENVIRONMENT" "$REGION"
@@ -127,6 +137,52 @@ jobs:
           set -euo pipefail
           mkdir -p logs
           make plan-active-all ENV="$ENVIRONMENT" REGION="$REGION" 2>&1 | tee logs/plan-active-all.log
+
+      - name: Check pipeline Python syntax
+        shell: bash
+        run: python -m py_compile databricks/energy_market/src/energy_market_pipeline.py
+
+      - name: Resolve Databricks workspace host
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -n "${DATABRICKS_HOST:-}" ]; then
+            workspace_url="$DATABRICKS_HOST"
+          else
+            raw_workspace_output="$(
+              cd "src/live/$ENVIRONMENT/$REGION/workspace-infra" &&
+              terragrunt output -raw databricks_workspace_url 2>/dev/null || true
+            )"
+
+            workspace_url="$(
+              printf '%s\n' "$raw_workspace_output" |
+              awk '
+                /^[[:space:]]*(https:\/\/)?[A-Za-z0-9.-]+(\.cloud\.databricks\.com|\.azuredatabricks\.net)/ {
+                  gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+                  print
+                  exit
+                }
+              '
+            )"
+
+            if [ -z "$workspace_url" ]; then
+              echo "::error::DATABRICKS_HOST is not configured and workspace-infra has no databricks_workspace_url output yet."
+              exit 1
+            fi
+          fi
+
+          if [[ "$workspace_url" == https://* ]]; then
+            host="$workspace_url"
+          else
+            host="https://$workspace_url"
+          fi
+
+          printf 'DATABRICKS_HOST=%s\n' "$host" >> "$GITHUB_ENV"
+
+      - name: Validate Databricks bundle
+        shell: bash
+        run: make databricks-bundle-validate
 
       - name: Upload plan logs
         if: always()

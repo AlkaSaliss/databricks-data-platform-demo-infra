@@ -5,7 +5,7 @@
 [![Confluent Kafka Infrastructure](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/confluent-kafka-infra.yml)
 [![Producer Tests](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml/badge.svg)](https://github.com/AlkaSaliss/databricks-data-platform-demo-infra/actions/workflows/producer-tests.yml)
 
-This repository contains Terraform modules, Terragrunt live stacks, Dockerized producers, and local PyFlink jobs for a Databricks data platform demo on AWS.
+This repository contains Terraform modules, Terragrunt live stacks, Dockerized producers, local PyFlink jobs, and a Databricks Asset Bundle for a Databricks data platform demo on AWS.
 
 ## Stack Overview
 
@@ -15,8 +15,8 @@ The active AWS/Databricks deployment is split into six stacks under `src/live/<e
 2. `account-admin`
 3. `network-infra`
 4. `uc-metastore-infra`
-5. `workspace-infra`
-6. `streaming-lake-infra`
+5. `streaming-lake-infra`
+6. `workspace-infra`
 
 Recommended deployment order is the same as the list above. Destroy order is the reverse.
 
@@ -28,6 +28,8 @@ Recommended deployment order is the same as the list above. Destroy order is the
 ├── bin/
 │   ├── set_aws_credentials.sh
 │   └── set_env_vars.sh
+├── databricks/
+│   └── energy_market/
 ├── doc/
 │   ├── account-admin.md
 │   ├── network-infra.md
@@ -35,7 +37,6 @@ Recommended deployment order is the same as the list above. Destroy order is the
 │   ├── terraform-state-infra.md
 │   ├── uc-metastore-infra.md
 │   └── workspace-infra.md
-└── src/
 ├── apps/
 │   ├── flink/
 │   └── producers/
@@ -46,6 +47,7 @@ Recommended deployment order is the same as the list above. Destroy order is the
     │       └── eu-west-1/
     │           ├── account-admin/
     │           ├── network-infra/
+    │           ├── streaming-lake-infra/
     │           ├── terraform-state-infra/
     │           ├── uc-metastore-infra/
     │           ├── workspace-infra/
@@ -153,6 +155,34 @@ make deploy STACK=streaming-lake-infra
 ```
 
 Its `raw_fr_energy_grid_bronze_uri` output is exported by `bin/set_flink_output_vars.sh` and used as `FLINK_S3_BRONZE_URI`.
+
+## Databricks Lakehouse And DAB
+
+Deploy `workspace-infra` after the streaming lake stack:
+
+```bash
+make deploy STACK=workspace-infra
+```
+
+The workspace stack creates the Unity Catalog namespace and exposes the streaming lake bucket as:
+
+```text
+/Volumes/energy_market_demo/bronze/streaming_lake
+```
+
+The Databricks Asset Bundle under `databricks/energy_market` defines a serverless Lakeflow Declarative Pipeline. It reads only the raw Flink bronze files through Auto Loader, then creates:
+
+- `energy_market_demo.bronze.raw_fr_energy_grid`
+- `energy_market_demo.silver.fr_energy_market_snapshots_15min`
+- `energy_market_demo.gold.fr_energy_market_kpis_daily`
+
+Run the bundle with existing Databricks CLI authentication:
+
+```bash
+make databricks-bundle-validate
+make databricks-bundle-deploy
+make databricks-bundle-run
+```
 
 ## Docker Kafka Producer
 
@@ -266,7 +296,7 @@ make flink-test
 The repository uses these GitHub Actions workflows:
 
 - `.github/workflows/pr-infra.yml` runs validation and planning for the active AWS/Databricks stacks on pull requests.
-- `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit.
+- `.github/workflows/deploy-infra.yml` runs manual deployment for an approved AWS/Databricks commit and can deploy or run the Databricks Asset Bundle.
 - `.github/workflows/confluent-kafka-infra.yml` runs independent Confluent Kafka validation, planning, and manual deployment.
 - `.github/workflows/streaming-lake-infra.yml` runs independent S3 bronze bucket validation, planning, and manual deployment.
 - `.github/workflows/producer-tests.yml` runs producer unit tests, Docker producer dry-runs, Docker image validation, and Flink job unit tests without publishing to Kafka.
@@ -276,12 +306,13 @@ The AWS/Databricks workflows target the active workspace stacks sequentially for
 1. `account-admin`
 2. `network-infra`
 3. `uc-metastore-infra`
-4. `workspace-infra`
+4. `streaming-lake-infra`
+5. `workspace-infra`
 
 `terraform-state-infra` is intentionally excluded from CI/CD because it bootstraps the remote state bucket and lock table and is deployed once manually.
-Active workspace destroys run in reverse order: `workspace-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
+Active workspace destroys run in reverse order: `workspace-infra`, `streaming-lake-infra`, `uc-metastore-infra`, `network-infra`, `account-admin`.
 
-`streaming-lake-infra` is deployed by the separate Streaming Lake workflow because it only needs AWS credentials and should not depend on Databricks CI secrets.
+The workspace stack depends on `streaming-lake-infra` because it creates the Unity Catalog external volume over that bucket.
 
 ### GitHub Variables And Secrets
 
@@ -304,6 +335,7 @@ Optional secret:
 Configure these GitHub variables:
 
 - `DATABRICKS_OWNER_EMAIL`
+- `DATABRICKS_HOST`
 - `DATABRICKS_ACCOUNT_ADMINS_JSON`
 - `DATABRICKS_USERS_JSON`
 - `WORKSPACE_USERS_JSON`
@@ -315,6 +347,8 @@ Optional variables:
 - `UNITY_USERS_GROUP`
 - `CREATE_AUTOMATION_SERVICE_PRINCIPAL`
 - `AUTOMATION_SERVICE_PRINCIPAL_NAME`
+
+`DATABRICKS_HOST` is optional after `workspace-infra` has been deployed; the workflows can resolve it from the `databricks_workspace_url` Terraform output. Setting it explicitly is still useful for bundle-only runs and clearer diagnostics.
 
 JSON variables must be valid JSON values because the workflow writes `terraform.tfvars.json`. Compact single-line JSON is recommended for GitHub variables, for example:
 
@@ -340,6 +374,7 @@ The PR workflow runs:
 - `make hcl-validate-active-all ENV=dev REGION=eu-west-1`
 - `make validate-active-all ENV=dev REGION=eu-west-1`
 - `make plan-active-all ENV=dev REGION=eu-west-1`
+- `make databricks-bundle-validate`
 
 Plan logs are uploaded as GitHub Actions artifacts.
 
@@ -350,6 +385,8 @@ From GitHub, open **Actions** > **Deploy Databricks Demo Workspace Infrastructur
 Use `action=plan` to run validation and planning only.
 Use `action=apply` to run validation and planning first, then wait for the `dev` Environment approval before applying the active stacks sequentially.
 Use `action=destroy` to run validation and planning first, then wait for the `dev` Environment approval before destroying the active stacks in reverse order.
+Use `action=deploy-bundle` to validate infra and deploy the Databricks Asset Bundle.
+Use `action=run-pipeline` to validate infra, deploy the bundle, and run `energy_market_pipeline`.
 
 For the S3 bronze bucket, open **Actions** > **Streaming Lake Infrastructure** > **Run workflow** and choose `plan`, `apply`, or `destroy`.
 

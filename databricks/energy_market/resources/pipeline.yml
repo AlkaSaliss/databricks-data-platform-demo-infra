@@ -1,0 +1,17 @@
+resources:
+  pipelines:
+    energy_market_pipeline:
+      name: ${bundle.target}-energy-market-demo
+      catalog: ${var.catalog_name}
+      schema: ${var.bronze_schema_name}
+      serverless: true
+      development: true
+      libraries:
+        - file:
+            path: ../src/energy_market_pipeline.py
+      configuration:
+        energy_market.catalog: ${var.catalog_name}
+        energy_market.bronze_schema: ${var.bronze_schema_name}
+        energy_market.silver_schema: ${var.silver_schema_name}
+        energy_market.gold_schema: ${var.gold_schema_name}
+        energy_market.source_volume_path: ${var.source_volume_path}

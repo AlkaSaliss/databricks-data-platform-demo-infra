@@ -1,0 +1,27 @@
+bundle:
+  name: energy-market-demo
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog_name:
+    description: Unity Catalog catalog used by the demo pipeline.
+    default: energy_market_demo
+  bronze_schema_name:
+    description: Bronze schema used by the demo pipeline.
+    default: bronze
+  silver_schema_name:
+    description: Silver schema used by the demo pipeline.
+    default: silver
+  gold_schema_name:
+    description: Gold schema used by the demo pipeline.
+    default: gold
+  source_volume_path:
+    description: Unity Catalog volume path exposing the Flink streaming lake bucket.
+    default: /Volumes/energy_market_demo/bronze/streaming_lake
+
+targets:
+  dev:
+    mode: development
+    default: true

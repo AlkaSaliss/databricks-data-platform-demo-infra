@@ -63,20 +63,34 @@ dependency "metastore" {
   mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
 }
 
+dependency "streaming_lake" {
+  config_path = "../streaming-lake-infra"
+
+  mock_outputs = {
+    bronze_bucket_name = "mock-streaming-bronze"
+    bronze_bucket_arn  = "arn:aws:s3:::mock-streaming-bronze"
+  }
+
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
+}
+
 # Pass region, dependency outputs, and workspace-specific wiring to Terraform
 inputs = {
-  region                   = include.region.locals.aws_region
-  prefix                   = "ws-${include.env.locals.environment}-${include.region.locals.aws_region}"
-  workspace_name           = "lab"
-  databricks_account_id    = include.env.locals.databricks_account_id
-  databricks_client_id     = include.env.locals.databricks_client_id
-  databricks_client_secret = include.env.locals.databricks_client_secret
-  admin_group_id           = dependency.account_admin.outputs.admin_group.id
-  vpc_id                   = dependency.network.outputs.vpc_id
-  subnet_ids               = dependency.network.outputs.subnets
-  security_group_ids       = dependency.network.outputs.security_group_ids
-  metastore_id             = dependency.metastore.outputs.metastore_id
-  roles_to_assume          = [dependency.metastore.outputs.unity_catalog_iam_role_arn]
+  region                     = include.region.locals.aws_region
+  prefix                     = "ws-${include.env.locals.environment}-${include.region.locals.aws_region}"
+  workspace_name             = "lab"
+  databricks_account_id      = include.env.locals.databricks_account_id
+  databricks_client_id       = include.env.locals.databricks_client_id
+  databricks_client_secret   = include.env.locals.databricks_client_secret
+  admin_group_id             = dependency.account_admin.outputs.admin_group.id
+  vpc_id                     = dependency.network.outputs.vpc_id
+  subnet_ids                 = dependency.network.outputs.subnets
+  security_group_ids         = dependency.network.outputs.security_group_ids
+  metastore_id               = dependency.metastore.outputs.metastore_id
+  roles_to_assume            = [dependency.metastore.outputs.unity_catalog_iam_role_arn]
+  lakehouse_prefix           = "energy-market-demo-${include.env.locals.environment}-${include.region.locals.aws_region}"
+  streaming_lake_bucket_name = dependency.streaming_lake.outputs.bronze_bucket_name
+  streaming_lake_bucket_arn  = dependency.streaming_lake.outputs.bronze_bucket_arn
 }
 
 # Other variables are defined in terraform.tfvars file

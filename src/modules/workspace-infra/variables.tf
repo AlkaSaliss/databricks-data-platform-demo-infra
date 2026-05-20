@@ -90,3 +90,49 @@ variable "roles_to_assume" {
   description = "(Optional) AWS role ARNs that the Databricks cross-account role can pass"
   default     = []
 }
+
+variable "lakehouse_prefix" {
+  type        = string
+  description = "(Optional) Prefix used for demo lakehouse AWS and Databricks object names."
+  default     = null
+}
+
+variable "streaming_lake_bucket_name" {
+  type        = string
+  description = "(Required) S3 bucket name populated by local Flink bronze writes."
+}
+
+variable "streaming_lake_bucket_arn" {
+  type        = string
+  description = "(Required) S3 bucket ARN populated by local Flink bronze writes."
+}
+
+variable "lakehouse_catalog_name" {
+  type        = string
+  description = "(Optional) Unity Catalog catalog for the energy market demo."
+  default     = "energy_market_demo"
+}
+
+variable "lakehouse_bronze_schema_name" {
+  type        = string
+  description = "(Optional) Bronze schema name for the energy market demo."
+  default     = "bronze"
+}
+
+variable "lakehouse_silver_schema_name" {
+  type        = string
+  description = "(Optional) Silver schema name for the energy market demo."
+  default     = "silver"
+}
+
+variable "lakehouse_gold_schema_name" {
+  type        = string
+  description = "(Optional) Gold schema name for the energy market demo."
+  default     = "gold"
+}
+
+variable "streaming_lake_volume_name" {
+  type        = string
+  description = "(Optional) External volume name exposing the streaming lake bucket."
+  default     = "streaming_lake"
+}
