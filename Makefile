@@ -168,13 +168,13 @@ flink-test: ## Run Python Flink job tests
 	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m pytest
 
 databricks-bundle-validate: ## Validate the Databricks Asset Bundle for the energy market pipeline
-	@host="$$(ENV="$(ENV)" REGION="$(REGION)" ./bin/resolve_databricks_host.sh)" && cd $(DATABRICKS_BUNDLE_DIR) && DATABRICKS_HOST="$$host" databricks bundle validate -t dev
+	@host="$$(ENV="$(ENV)" REGION="$(REGION)" ./bin/resolve_databricks_host.sh)" && cd $(DATABRICKS_BUNDLE_DIR) && DATABRICKS_HOST="$$host" DATABRICKS_BUNDLE_ENGINE=direct databricks bundle validate -t dev
 
 databricks-bundle-deploy: ## Deploy the Databricks Asset Bundle for the energy market pipeline
-	@host="$$(ENV="$(ENV)" REGION="$(REGION)" ./bin/resolve_databricks_host.sh)" && cd $(DATABRICKS_BUNDLE_DIR) && DATABRICKS_HOST="$$host" databricks bundle deploy -t dev
+	@host="$$(ENV="$(ENV)" REGION="$(REGION)" ./bin/resolve_databricks_host.sh)" && cd $(DATABRICKS_BUNDLE_DIR) && DATABRICKS_HOST="$$host" DATABRICKS_BUNDLE_ENGINE=direct databricks bundle deploy -t dev
 
 databricks-bundle-run: ## Run the Lakeflow pipeline from the Databricks Asset Bundle
-	@host="$$(ENV="$(ENV)" REGION="$(REGION)" ./bin/resolve_databricks_host.sh)" && cd $(DATABRICKS_BUNDLE_DIR) && DATABRICKS_HOST="$$host" databricks bundle run -t dev energy_market_pipeline
+	@host="$$(ENV="$(ENV)" REGION="$(REGION)" ./bin/resolve_databricks_host.sh)" && cd $(DATABRICKS_BUNDLE_DIR) && DATABRICKS_HOST="$$host" DATABRICKS_BUNDLE_ENGINE=direct databricks bundle run -t dev energy_market_pipeline
 
 plan-all: ## Run plan for all stacks in deployment order
 	@for stack in $(DEPLOY_ORDER); do \
