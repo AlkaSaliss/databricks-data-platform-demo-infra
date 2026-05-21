@@ -358,7 +358,7 @@ Optional variables:
 
 The local Databricks bundle Make targets use the same fallback: if `DATABRICKS_HOST` is not exported, they read `databricks_workspace_url` from the `workspace-infra` Terragrunt output and pass it to the Databricks CLI as a workspace host.
 
-The bundle uses the Databricks direct deployment engine, so local deploys do not download Terraform during `databricks bundle deploy`. This avoids Terraform checksum-signature failures in older CLI download paths.
+The local Databricks bundle Make targets also set `DATABRICKS_TF_EXEC_PATH` and `DATABRICKS_TF_VERSION` from the Terraform binary in `PATH`. This makes the Databricks CLI use your installed Terraform instead of downloading Terraform during `databricks bundle deploy`, avoiding checksum-signature failures in older CLI download paths.
 
 JSON variables must be valid JSON values because the workflow writes `terraform.tfvars.json`. Compact single-line JSON is recommended for GitHub variables, for example:
 

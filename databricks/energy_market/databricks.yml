@@ -1,6 +1,5 @@
 bundle:
   name: energy-market-demo
-  engine: direct
 
 include:
   - resources/*.yml
