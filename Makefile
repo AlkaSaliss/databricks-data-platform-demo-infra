@@ -69,7 +69,7 @@ deploy: ensure-stack-dir ## Run terragrunt apply for one stack
 	@cd $(STACK_DIR) && terragrunt apply
 
 deploy-ci: ensure-stack-dir ## Run non-interactive terragrunt apply for one stack in CI
-	@cd $(STACK_DIR) && terragrunt apply -auto-approve
+	@cd $(STACK_DIR) && terragrunt --non-interactive apply -auto-approve
 
 apply: deploy ## Alias for deploy
 
@@ -77,7 +77,7 @@ destroy: ensure-stack-dir ## Run terragrunt destroy for one stack
 	@cd $(STACK_DIR) && terragrunt destroy
 
 destroy-ci: ensure-stack-dir ## Run non-interactive terragrunt destroy for one stack in CI
-	@cd $(STACK_DIR) && terragrunt destroy -auto-approve
+	@cd $(STACK_DIR) && terragrunt --non-interactive destroy -auto-approve
 
 validate: ensure-stack-dir ## Run terragrunt validate for one stack
 	@cd $(STACK_DIR) && terragrunt validate
