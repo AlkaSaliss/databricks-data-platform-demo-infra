@@ -9,6 +9,8 @@ This stack creates the S3 bucket used by local Flink jobs to land streaming lake
 - Public access block
 - Standard Terragrunt/AWS provider tags
 
+The bucket is intentionally protected from Terraform destruction. It has `prevent_destroy` enabled and is excluded from `make destroy-active-all`, because it stores Flink bronze and silver files used by Databricks. Destroying workspace infrastructure should not delete lake data.
+
 ## Outputs
 
 - `bronze_bucket_name`
@@ -21,6 +23,14 @@ This stack creates the S3 bucket used by local Flink jobs to land streaming lake
 make plan STACK=streaming-lake-infra
 make deploy STACK=streaming-lake-infra
 ```
+
+Routine teardown uses:
+
+```bash
+make destroy-active-all
+```
+
+That target destroys compute, workspace, metastore, network, and account resources, but preserves `streaming-lake-infra`.
 
 The raw France energy-grid bronze output is written under:
 

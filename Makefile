@@ -32,7 +32,7 @@ PRODUCER_RUNTIME_ARGS := --retry-max-attempts $(RETRY_MAX_ATTEMPTS) --retry-back
 DEPLOY_ORDER := terraform-state-infra account-admin network-infra uc-metastore-infra streaming-lake-infra workspace-infra
 ACTIVE_DEPLOY_ORDER := account-admin network-infra uc-metastore-infra streaming-lake-infra workspace-infra
 DESTROY_ORDER := workspace-infra streaming-lake-infra uc-metastore-infra network-infra account-admin terraform-state-infra
-ACTIVE_DESTROY_ORDER := workspace-infra streaming-lake-infra uc-metastore-infra network-infra account-admin
+ACTIVE_DESTROY_ORDER := workspace-infra uc-metastore-infra network-infra account-admin
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; printf "\nAvailable targets:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2} END {printf "\n"}' $(MAKEFILE_LIST)

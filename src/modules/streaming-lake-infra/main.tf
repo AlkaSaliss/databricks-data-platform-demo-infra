@@ -5,7 +5,11 @@ locals {
 
 resource "aws_s3_bucket" "bronze" {
   bucket        = local.bronze_bucket_name
-  force_destroy = true
+  force_destroy = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   tags = merge(var.tags, {
     Name = local.bronze_bucket_name
