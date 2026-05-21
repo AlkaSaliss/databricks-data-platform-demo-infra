@@ -33,6 +33,8 @@ Deploy these first:
 
 The catalog and demo schemas are configured with `force_destroy` so `make destroy-active-all` can remove Lakeflow-created tables and materialized views before deleting the schemas. This is intentionally scoped to Databricks-managed demo objects; the external streaming lake S3 bucket is protected separately by `streaming-lake-infra`.
 
+`make destroy-active-all` also runs `make databricks-demo-cleanup` before Terraform destroy. That cleanup deletes the demo Lakeflow pipeline and known Unity Catalog tables through the Databricks API, because those objects are created by the Databricks bundle rather than by the workspace Terraform stack.
+
 ## Required Environment Variables
 
 - `DATABRICKS_ACCOUNT_ID`
