@@ -172,21 +172,24 @@ resource "databricks_catalog" "energy_market" {
 }
 
 resource "databricks_schema" "bronze" {
-  catalog_name = databricks_catalog.energy_market.name
-  name         = var.lakehouse_bronze_schema_name
-  comment      = "Raw and externally mounted streaming lake data."
+  catalog_name  = databricks_catalog.energy_market.name
+  name          = var.lakehouse_bronze_schema_name
+  comment       = "Raw and externally mounted streaming lake data."
+  force_destroy = true
 }
 
 resource "databricks_schema" "silver" {
-  catalog_name = databricks_catalog.energy_market.name
-  name         = var.lakehouse_silver_schema_name
-  comment      = "Normalized France Eco2mix snapshot tables."
+  catalog_name  = databricks_catalog.energy_market.name
+  name          = var.lakehouse_silver_schema_name
+  comment       = "Normalized France Eco2mix snapshot tables."
+  force_destroy = true
 }
 
 resource "databricks_schema" "gold" {
-  catalog_name = databricks_catalog.energy_market.name
-  name         = var.lakehouse_gold_schema_name
-  comment      = "Curated KPI tables for the energy market demo."
+  catalog_name  = databricks_catalog.energy_market.name
+  name          = var.lakehouse_gold_schema_name
+  comment       = "Curated KPI tables for the energy market demo."
+  force_destroy = true
 }
 
 resource "databricks_storage_credential" "streaming_lake" {

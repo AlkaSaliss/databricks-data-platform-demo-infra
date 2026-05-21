@@ -31,6 +31,8 @@ Deploy these first:
 - IAM role and read-only Unity Catalog storage credential for the streaming lake bucket
 - External location and external volume `energy_market_demo.bronze.streaming_lake`
 
+The catalog and demo schemas are configured with `force_destroy` so `make destroy-active-all` can remove Lakeflow-created tables and materialized views before deleting the schemas. This is intentionally scoped to Databricks-managed demo objects; the external streaming lake S3 bucket is protected separately by `streaming-lake-infra`.
+
 ## Required Environment Variables
 
 - `DATABRICKS_ACCOUNT_ID`
