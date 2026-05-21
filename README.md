@@ -356,6 +356,8 @@ Optional variables:
 
 `DATABRICKS_HOST` is optional after `workspace-infra` has been deployed; the workflows can resolve it from the `databricks_workspace_url` Terraform output. Setting it explicitly is still useful for bundle-only runs and clearer diagnostics.
 
+The local Databricks bundle Make targets use the same fallback: if `DATABRICKS_HOST` is not exported, they read `databricks_workspace_url` from the `workspace-infra` Terragrunt output and pass it to the Databricks CLI as a workspace host.
+
 JSON variables must be valid JSON values because the workflow writes `terraform.tfvars.json`. Compact single-line JSON is recommended for GitHub variables, for example:
 
 ```json
