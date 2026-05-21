@@ -8,6 +8,8 @@ import os
 from dataclasses import dataclass
 
 DEFAULT_GROUP_ID = "energy-market-flink-bronze"
+DEFAULT_STARTUP_MODE = "group-offsets"
+STARTUP_MODES = {"group-offsets", "earliest-offset"}
 
 
 class FlinkConfigError(RuntimeError):
@@ -21,6 +23,7 @@ class BronzeSinkConfig:
     kafka_api_key: str
     kafka_api_secret: str
     kafka_group_id: str
+    kafka_startup_mode: str
     s3_bronze_uri: str
 
     @classmethod
@@ -38,6 +41,12 @@ class BronzeSinkConfig:
                 "Missing Flink environment variables: "
                 f"{', '.join(missing)}. Source bin/set_flink_output_vars.sh first."
             )
+        startup_mode = os.getenv("FLINK_KAFKA_STARTUP_MODE", DEFAULT_STARTUP_MODE)
+        if startup_mode not in STARTUP_MODES:
+            raise FlinkConfigError(
+                "FLINK_KAFKA_STARTUP_MODE must be one of: "
+                f"{', '.join(sorted(STARTUP_MODES))}."
+            )
 
         return cls(
             kafka_bootstrap_servers=strip_kafka_protocol(values["FLINK_KAFKA_BOOTSTRAP_SERVERS"] or ""),
@@ -45,16 +54,13 @@ class BronzeSinkConfig:
             kafka_api_key=values["FLINK_KAFKA_API_KEY"] or "",
             kafka_api_secret=values["FLINK_KAFKA_API_SECRET"] or "",
             kafka_group_id=os.getenv("FLINK_KAFKA_GROUP_ID", DEFAULT_GROUP_ID),
+            kafka_startup_mode=startup_mode,
             s3_bronze_uri=values["FLINK_S3_BRONZE_URI"] or "",
         )
 
     @property
     def s3_snapshot_uri(self) -> str:
         return lake_uri(self.s3_bronze_uri, "silver/fr_energy_market_snapshots_15min")
-
-    @property
-    def s3_hourly_kpi_uri(self) -> str:
-        return lake_uri(self.s3_bronze_uri, "gold/fr_energy_market_kpis_hourly")
 
 
 def strip_kafka_protocol(bootstrap_servers: str) -> str:
@@ -88,7 +94,7 @@ CREATE TABLE raw_fr_energy_grid_kafka (
   'properties.sasl.mechanism' = 'PLAIN',
   'properties.sasl.jaas.config' = 'org.apache.flink.kafka.shaded.org.apache.kafka.common.security.plain.PlainLoginModule required username="{sql(config.kafka_api_key)}" password="{sql(config.kafka_api_secret)}";',
   'properties.auto.offset.reset' = 'earliest',
-  'scan.startup.mode' = 'group-offsets',
+  'scan.startup.mode' = '{sql(config.kafka_startup_mode)}',
   'format' = 'raw'
 )
 """.strip()
@@ -134,27 +140,6 @@ def snapshot_sink_ddl(config: BronzeSinkConfig) -> str:
   event_date STRING
 """,
         config.s3_snapshot_uri,
-    )
-
-
-def hourly_kpi_sink_ddl(config: BronzeSinkConfig) -> str:
-    return filesystem_sink(
-        "fr_energy_market_kpis_hourly",
-        """
-  window_start TIMESTAMP(3),
-  window_end TIMESTAMP(3),
-  country_code STRING,
-  avg_consumption_mw DOUBLE,
-  max_consumption_mw DOUBLE,
-  avg_renewable_share DOUBLE,
-  avg_co2_intensity_g_per_kwh DOUBLE,
-  avg_forecast_error_mw DOUBLE,
-  snapshot_count BIGINT,
-  invalid_snapshot_count BIGINT,
-  market_stress_level STRING,
-  event_date STRING
-""",
-        config.s3_hourly_kpi_uri,
     )
 
 
@@ -256,31 +241,6 @@ FROM fr_snapshots
 """.strip()
 
 
-def hourly_kpi_insert_sql() -> str:
-    return """
-INSERT INTO fr_energy_market_kpis_hourly
-SELECT
-  window_start,
-  window_end,
-  country_code,
-  AVG(consumption_mw),
-  MAX(consumption_mw),
-  AVG(renewable_generation_mw / NULLIF(total_generation_mw, 0)),
-  AVG(co2_intensity_g_per_kwh),
-  AVG(consumption_mw - forecast_current_day_mw),
-  COUNT(*),
-  SUM(CASE WHEN consumption_mw IS NULL THEN 1 ELSE 0 END),
-  CASE
-    WHEN AVG(renewable_generation_mw / NULLIF(total_generation_mw, 0)) < 0.25 OR AVG(co2_intensity_g_per_kwh) >= 80 THEN 'high'
-    WHEN AVG(renewable_generation_mw / NULLIF(total_generation_mw, 0)) < 0.40 THEN 'medium'
-    ELSE 'normal'
-  END,
-  DATE_FORMAT(window_start, 'yyyy-MM-dd')
-FROM TABLE(TUMBLE(TABLE fr_snapshots, DESCRIPTOR(event_time), INTERVAL '1' HOUR))
-GROUP BY window_start, window_end, country_code
-""".strip()
-
-
 def run_job(config: BronzeSinkConfig) -> None:
     from pyflink.datastream import StreamExecutionEnvironment
     from pyflink.table import EnvironmentSettings, StreamTableEnvironment
@@ -295,7 +255,6 @@ def run_job(config: BronzeSinkConfig) -> None:
         kafka_source_ddl(config),
         bronze_sink_ddl(config),
         snapshot_sink_ddl(config),
-        hourly_kpi_sink_ddl(config),
         snapshot_view_sql(),
     ]:
         table_env.execute_sql(ddl)
@@ -303,7 +262,6 @@ def run_job(config: BronzeSinkConfig) -> None:
     statements = table_env.create_statement_set()
     statements.add_insert_sql(bronze_insert_sql())
     statements.add_insert_sql(snapshot_insert_sql())
-    statements.add_insert_sql(hourly_kpi_insert_sql())
     statements.execute().wait()
 
 
@@ -320,9 +278,9 @@ def main() -> int:
                     "kafka_bootstrap_servers": config.kafka_bootstrap_servers,
                     "kafka_topic": config.kafka_topic,
                     "kafka_group_id": config.kafka_group_id,
+                    "kafka_startup_mode": config.kafka_startup_mode,
                     "s3_bronze_uri": config.s3_bronze_uri,
                     "s3_snapshot_uri": config.s3_snapshot_uri,
-                    "s3_hourly_kpi_uri": config.s3_hourly_kpi_uri,
                 },
                 sort_keys=True,
             )

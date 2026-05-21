@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-test databricks-bundle-validate databricks-bundle-deploy databricks-bundle-run plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-bronze-submit-continue flink-bronze-submit-replay flink-test databricks-bundle-validate databricks-bundle-deploy databricks-bundle-run plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -19,6 +19,7 @@ SCHEDULE_INTERVAL_SECONDS ?= 60
 MAX_RUNS ?= 2
 LOG_LEVEL ?= INFO
 LOG_FORMAT ?= json
+FLINK_KAFKA_STARTUP_MODE ?= group-offsets
 
 SRC_DIR := src
 ENERGY_PRODUCER_APP_DIR := apps/producers/energy_market
@@ -155,7 +156,13 @@ flink-bronze-dry-run-config: ## Validate local Flink bronze sink environment var
 	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m jobs.raw_fr_energy_grid_to_s3 --dry-run-config
 
 flink-bronze-submit: ## Submit the raw France Kafka-to-S3 bronze PyFlink job to the local Flink cluster
-	@docker compose -f $(ENERGY_FLINK_APP_DIR)/compose.yaml --project-directory $(ENERGY_FLINK_APP_DIR) up job-submitter
+	@FLINK_KAFKA_STARTUP_MODE="$(FLINK_KAFKA_STARTUP_MODE)" docker compose -f $(ENERGY_FLINK_APP_DIR)/compose.yaml --project-directory $(ENERGY_FLINK_APP_DIR) up job-submitter
+
+flink-bronze-submit-continue: ## Submit Flink and continue from committed Kafka consumer-group offsets
+	@$(MAKE) --no-print-directory flink-bronze-submit FLINK_KAFKA_STARTUP_MODE=group-offsets
+
+flink-bronze-submit-replay: ## Submit Flink and replay Kafka from the beginning
+	@$(MAKE) --no-print-directory flink-bronze-submit FLINK_KAFKA_STARTUP_MODE=earliest-offset
 
 flink-test: ## Run Python Flink job tests
 	@cd $(ENERGY_FLINK_APP_DIR) && $(PYTHON) -m pytest

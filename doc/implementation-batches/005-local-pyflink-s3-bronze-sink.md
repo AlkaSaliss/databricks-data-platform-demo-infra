@@ -39,6 +39,7 @@ The Flink helper exports:
 - `FLINK_KAFKA_API_KEY`
 - `FLINK_KAFKA_API_SECRET`
 - `FLINK_KAFKA_GROUP_ID`
+- `FLINK_KAFKA_STARTUP_MODE` (optional: `group-offsets` or `earliest-offset`)
 - `FLINK_S3_BRONZE_URI`
 
 ## Commands
@@ -61,6 +62,12 @@ Submit the Flink job. In this batch it writes bronze only; later batches keep th
 make flink-bronze-submit
 ```
 
+The default startup mode is `group-offsets`, which continues from committed offsets for `FLINK_KAFKA_GROUP_ID`. To force a full replay from the beginning of the topic, run:
+
+```bash
+make flink-bronze-submit-replay
+```
+
 Publish source events with the Docker-only producer:
 
 ```bash
@@ -78,7 +85,7 @@ make flink-test
 
 The PyFlink job reads raw Kafka message values as JSON strings, extracts the raw envelope fields, preserves the complete payload and raw event JSON, and writes Parquet records partitioned by `country_code` and `event_date` under `FLINK_S3_BRONZE_URI`.
 
-This batch intentionally landed raw bronze data only when introduced. Batch 008 extends the same local Flink job to also write enriched 15-minute snapshots and hourly KPI rollups while keeping this bronze output backward compatible.
+This batch intentionally landed raw bronze data only when introduced. Batch 008 extends the same local Flink job to also write enriched 15-minute snapshots while keeping this bronze output backward compatible.
 
 ## Troubleshooting
 

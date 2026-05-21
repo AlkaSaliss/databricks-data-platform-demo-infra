@@ -34,9 +34,8 @@ After `workspace-infra` is deployed, Databricks reads the same raw bronze prefix
 /Volumes/energy_market_demo/bronze/streaming_lake/bronze/raw_fr_energy_grid/
 ```
 
-The current local Flink job also derives sibling demo outputs in the same bucket:
+The current local Flink job also derives an enriched snapshot output in the same bucket:
 
 ```text
 s3://<bronze-bucket>/silver/fr_energy_market_snapshots_15min/
-s3://<bronze-bucket>/gold/fr_energy_market_kpis_hourly/
 ```
