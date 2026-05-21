@@ -16,9 +16,11 @@ fi
 export DATABRICKS_HOST="$host"
 
 delete_pipeline() {
+  local pipelines_json
   local pipeline_id
+  pipelines_json="$(databricks pipelines list-pipelines -o json 2>/dev/null || true)"
   pipeline_id="$(
-    databricks pipelines list-pipelines -o json 2>/dev/null |
+    printf '%s\n' "$pipelines_json" |
       python3 -c '
 import json
 import sys
@@ -29,7 +31,12 @@ try:
 except json.JSONDecodeError:
     sys.exit(0)
 
-for pipeline in payload.get("statuses", []) + payload.get("pipelines", []):
+if isinstance(payload, list):
+    pipelines = payload
+else:
+    pipelines = payload.get("statuses", []) + payload.get("pipelines", [])
+
+for pipeline in pipelines:
     if pipeline.get("name") == target_name:
         print(pipeline.get("pipeline_id") or pipeline.get("pipeline_id", ""))
         break
@@ -50,7 +57,9 @@ delete_table() {
 
 delete_schema_tables() {
   local schema="$1"
-  databricks tables list "$catalog" "$schema" -o json 2>/dev/null |
+  local tables_json
+  tables_json="$(databricks tables list "$catalog" "$schema" -o json 2>/dev/null || true)"
+  printf '%s\n' "$tables_json" |
     python3 -c '
 import json
 import sys
@@ -62,7 +71,9 @@ try:
 except json.JSONDecodeError:
     sys.exit(0)
 
-for table in payload.get("tables", []):
+tables = payload if isinstance(payload, list) else payload.get("tables", [])
+
+for table in tables:
     print(table.get("full_name") or f"{catalog}.{schema}.{table.get('name')}")
     ' "$catalog" "$schema" |
     while IFS= read -r full_name; do

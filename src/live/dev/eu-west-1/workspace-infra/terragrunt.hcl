@@ -32,7 +32,7 @@ dependency "account_admin" {
     }
   }
 
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output", "destroy"]
 }
 
 dependency "network" {
@@ -49,7 +49,7 @@ dependency "network" {
     ]
   }
 
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output", "destroy"]
 }
 
 dependency "metastore" {
@@ -60,7 +60,7 @@ dependency "metastore" {
     unity_catalog_iam_role_arn = "arn:aws:iam::123456789012:role/mock-metastore-role"
   }
 
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output", "destroy"]
 }
 
 dependency "streaming_lake" {
@@ -71,7 +71,7 @@ dependency "streaming_lake" {
     bronze_bucket_arn  = "arn:aws:s3:::mock-streaming-bronze"
   }
 
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "output", "destroy"]
 }
 
 # Pass region, dependency outputs, and workspace-specific wiring to Terraform

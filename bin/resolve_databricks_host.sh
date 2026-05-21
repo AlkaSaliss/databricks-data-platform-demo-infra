@@ -3,11 +3,12 @@ set -euo pipefail
 
 environment="${ENV:-dev}"
 region="${REGION:-eu-west-1}"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [ -n "${DATABRICKS_HOST:-}" ]; then
   workspace_url="$DATABRICKS_HOST"
 else
-  workspace_stack="src/live/${environment}/${region}/workspace-infra"
+  workspace_stack="$repo_root/src/live/${environment}/${region}/workspace-infra"
   if [ ! -d "$workspace_stack" ]; then
     echo "Workspace stack not found: $workspace_stack" >&2
     exit 1
@@ -28,6 +29,25 @@ else
         }
       '
   )"
+
+  if [ -z "$workspace_url" ]; then
+    raw_workspace_state="$(
+      cd "$workspace_stack" &&
+        terragrunt state show databricks_mws_workspaces.this 2>/dev/null || true
+    )"
+
+    workspace_url="$(
+      printf '%s\n' "$raw_workspace_state" |
+        awk -F'=' '
+          /^[[:space:]]*workspace_url[[:space:]]*=/ {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)
+            gsub(/^"|"$/, "", $2)
+            print $2
+            exit
+          }
+        '
+    )"
+  fi
 
   if [ -z "$workspace_url" ]; then
     echo "DATABRICKS_HOST is not set and workspace-infra has no databricks_workspace_url output yet." >&2

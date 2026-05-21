@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-bronze-submit-continue flink-bronze-submit-replay flink-test databricks-demo-cleanup databricks-demo-state-forget databricks-bundle-validate databricks-bundle-deploy databricks-bundle-run plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-bronze-submit-continue flink-bronze-submit-replay flink-test databricks-demo-cleanup databricks-demo-state-forget databricks-metastore-state-forget databricks-account-admin-state-forget databricks-bundle-validate databricks-bundle-deploy databricks-bundle-run plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -22,10 +22,11 @@ LOG_FORMAT ?= json
 FLINK_KAFKA_STARTUP_MODE ?= group-offsets
 
 SRC_DIR := src
+ROOT_DIR := $(abspath .)
 ENERGY_PRODUCER_APP_DIR := apps/producers/energy_market
 ENERGY_FLINK_APP_DIR := apps/flink/energy_market
 DATABRICKS_BUNDLE_DIR := databricks/energy_market
-LIVE_DIR := $(SRC_DIR)/live/$(ENV)/$(REGION)
+LIVE_DIR := $(ROOT_DIR)/$(SRC_DIR)/live/$(ENV)/$(REGION)
 STACK_DIR := $(LIVE_DIR)/$(STACK)
 PRODUCER_RUNTIME_ARGS := --retry-max-attempts $(RETRY_MAX_ATTEMPTS) --retry-backoff-seconds $(RETRY_BACKOFF_SECONDS) --log-level $(LOG_LEVEL) --log-format $(LOG_FORMAT) $(if $(REQUEST_RATE_LIMIT_PER_SECOND),--request-rate-limit-per-second $(REQUEST_RATE_LIMIT_PER_SECOND),) $(if $(PUBLISH_RATE_LIMIT_PER_SECOND),--publish-rate-limit-per-second $(PUBLISH_RATE_LIMIT_PER_SECOND),)
 
@@ -171,14 +172,25 @@ databricks-demo-cleanup: ## Delete demo Lakeflow pipeline tables before workspac
 	@ENV="$(ENV)" REGION="$(REGION)" ./bin/cleanup_databricks_demo_objects.sh
 
 databricks-demo-state-forget: ## Remove Databricks demo schema objects from workspace Terraform state after API cleanup
-	@cd $(LIVE_DIR)/workspace-infra && terragrunt --non-interactive init -reconfigure >/dev/null
-	@for address in \
+	@cd "$(LIVE_DIR)/workspace-infra" && \
+		terragrunt --non-interactive --source-update init -reconfigure >/dev/null && \
+		for address in \
 		databricks_volume.streaming_lake \
 		databricks_schema.bronze \
 		databricks_schema.silver \
 		databricks_schema.gold; do \
-		cd $(LIVE_DIR)/workspace-infra && terragrunt state rm $$address >/dev/null 2>&1 || true; \
-	done
+			terragrunt state rm $$address >/dev/null 2>&1 || true; \
+		done
+
+databricks-metastore-state-forget: ## Remove Databricks root metastore credential state before metastore teardown
+	@cd "$(LIVE_DIR)/uc-metastore-infra" && \
+		terragrunt --non-interactive --source-update init -reconfigure >/dev/null && \
+		terragrunt state rm databricks_metastore_data_access.default >/dev/null 2>&1 || true
+
+databricks-account-admin-state-forget: ## Keep Terraform service principal account-admin bootstrap role during teardown
+	@cd "$(LIVE_DIR)/account-admin" && \
+		terragrunt --non-interactive --source-update init -reconfigure >/dev/null && \
+		terragrunt state rm databricks_service_principal_role.terraform_sp_account_admin >/dev/null 2>&1 || true
 
 databricks-bundle-validate: ## Validate the Databricks Asset Bundle for the energy market pipeline
 	@ENV="$(ENV)" REGION="$(REGION)" ./bin/run_databricks_bundle.sh validate -t dev
@@ -229,6 +241,8 @@ destroy-all: ## Run destroy for all stacks in reverse order
 destroy-active-all: ## Run non-interactive destroy for active stacks in reverse order, excluding terraform-state-infra
 	@$(MAKE) --no-print-directory databricks-demo-cleanup ENV=$(ENV) REGION=$(REGION)
 	@$(MAKE) --no-print-directory databricks-demo-state-forget ENV=$(ENV) REGION=$(REGION)
+	@$(MAKE) --no-print-directory databricks-metastore-state-forget ENV=$(ENV) REGION=$(REGION)
+	@$(MAKE) --no-print-directory databricks-account-admin-state-forget ENV=$(ENV) REGION=$(REGION)
 	@for stack in $(ACTIVE_DESTROY_ORDER); do \
 		$(MAKE) --no-print-directory destroy-ci ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
 	done
