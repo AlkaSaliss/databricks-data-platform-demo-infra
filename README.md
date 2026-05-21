@@ -260,11 +260,20 @@ make flink-docker-build
 make flink-bronze-dry-run-config
 ```
 
-Submit the local Flink job. The target name is kept for compatibility, but the job now writes bronze, enriched snapshot, and hourly KPI outputs:
+Submit the local Flink job. The target name is kept for compatibility, but the job now writes bronze and enriched snapshot outputs:
 
 ```bash
 make flink-bronze-submit
 ```
+
+By default this continues from committed offsets for `FLINK_KAFKA_GROUP_ID`. Use the explicit targets when you want to choose the startup behavior:
+
+```bash
+make flink-bronze-submit-continue  # scan.startup.mode=group-offsets
+make flink-bronze-submit-replay    # scan.startup.mode=earliest-offset
+```
+
+You can also set `FLINK_KAFKA_STARTUP_MODE` directly to `group-offsets` or `earliest-offset` before running `make flink-bronze-submit`.
 
 In another shell with producer variables exported, publish events:
 
@@ -275,14 +284,11 @@ In another shell with producer variables exported, publish events:
 make kafka-producer-docker-run LAST_DAYS=1
 ```
 
-The job writes raw France energy-grid bronze Parquet files under `FLINK_S3_BRONZE_URI`, partitioned by `country_code` and `event_date`. It also writes two demo-ready datasets in the same streaming lake bucket:
+The job writes raw France energy-grid bronze Parquet files under `FLINK_S3_BRONZE_URI`, partitioned by `country_code` and `event_date`. It also writes enriched 15-minute snapshots under `silver/fr_energy_market_snapshots_15min` in the same streaming lake bucket.
 
-- enriched 15-minute snapshots under `silver/fr_energy_market_snapshots_15min`
-- hourly trend KPIs under `gold/fr_energy_market_kpis_hourly`
+The enriched snapshot output keeps the demo intentionally compact: demand, forecast, forecast error, total generation, renewable/fossil share, CO2 intensity, and simple quality status. Daily KPIs are produced downstream in Databricks from the raw Flink bronze data.
 
-The enriched snapshot output keeps the demo intentionally compact: demand, forecast, forecast error, total generation, renewable/fossil share, CO2 intensity, and simple quality status. The hourly output aggregates those snapshots with average demand, peak demand, renewable share, CO2 intensity, forecast error, record counts, invalid counts, and a simple market stress label.
-
-The Kafka source starts from committed consumer-group offsets and falls back to the earliest offset only for a new group. This keeps local Docker restarts from replaying the whole topic after Flink has checkpointed and committed progress for `FLINK_KAFKA_GROUP_ID`; leave the job running for at least one checkpoint after consumption before stopping it.
+The Kafka source starts from committed consumer-group offsets and falls back to the earliest offset only for a new group. This keeps local Docker restarts from replaying the whole topic after Flink has checkpointed and committed progress for `FLINK_KAFKA_GROUP_ID`; leave the job running for at least one checkpoint after consumption before stopping it. When you intentionally want a full replay, use `make flink-bronze-submit-replay`.
 
 Run Flink job unit tests directly when changing job internals:
 
