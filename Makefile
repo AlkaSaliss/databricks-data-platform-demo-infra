@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-bronze-submit-continue flink-bronze-submit-replay flink-test databricks-demo-cleanup databricks-bundle-validate databricks-bundle-deploy databricks-bundle-run plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
+.PHONY: help env-vars list-stacks list-active-stacks show-config plan deploy deploy-ci apply destroy destroy-ci validate hcl-validate fmt fmt-check clean kafka-export-vars-local flink-export-vars-local all-env-vars-export-local kafka-producer-docker-build kafka-producer-docker-dry-run kafka-producer-docker-real-dry-run kafka-producer-docker-scheduled-dry-run kafka-producer-docker-run kafka-producer-docker-backfill-dry-run kafka-producer-docker-backfill-run producer-test flink-docker-build flink-bronze-dry-run-config flink-bronze-submit flink-bronze-submit-continue flink-bronze-submit-replay flink-test databricks-demo-cleanup databricks-demo-state-forget databricks-bundle-validate databricks-bundle-deploy databricks-bundle-run plan-all plan-active-all validate-active-all hcl-validate-active-all deploy-all deploy-active-all apply-all destroy-all destroy-active-all
 
 ENV ?= dev
 REGION ?= eu-west-1
@@ -170,6 +170,16 @@ flink-test: ## Run Python Flink job tests
 databricks-demo-cleanup: ## Delete demo Lakeflow pipeline tables before workspace teardown
 	@ENV="$(ENV)" REGION="$(REGION)" ./bin/cleanup_databricks_demo_objects.sh
 
+databricks-demo-state-forget: ## Remove Databricks demo schema objects from workspace Terraform state after API cleanup
+	@cd $(LIVE_DIR)/workspace-infra && terragrunt --non-interactive init -reconfigure >/dev/null
+	@for address in \
+		databricks_volume.streaming_lake \
+		databricks_schema.bronze \
+		databricks_schema.silver \
+		databricks_schema.gold; do \
+		cd $(LIVE_DIR)/workspace-infra && terragrunt state rm $$address >/dev/null 2>&1 || true; \
+	done
+
 databricks-bundle-validate: ## Validate the Databricks Asset Bundle for the energy market pipeline
 	@ENV="$(ENV)" REGION="$(REGION)" ./bin/run_databricks_bundle.sh validate -t dev
 
@@ -218,6 +228,7 @@ destroy-all: ## Run destroy for all stacks in reverse order
 
 destroy-active-all: ## Run non-interactive destroy for active stacks in reverse order, excluding terraform-state-infra
 	@$(MAKE) --no-print-directory databricks-demo-cleanup ENV=$(ENV) REGION=$(REGION)
+	@$(MAKE) --no-print-directory databricks-demo-state-forget ENV=$(ENV) REGION=$(REGION)
 	@for stack in $(ACTIVE_DESTROY_ORDER); do \
 		$(MAKE) --no-print-directory destroy-ci ENV=$(ENV) REGION=$(REGION) STACK=$$stack || exit $$?; \
 	done

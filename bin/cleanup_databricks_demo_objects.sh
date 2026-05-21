@@ -79,3 +79,8 @@ delete_table "$catalog.gold.fr_energy_market_kpis_daily"
 delete_schema_tables bronze
 delete_schema_tables silver
 delete_schema_tables gold
+
+for schema in bronze silver gold; do
+  echo "Force deleting Databricks schema if present: $catalog.$schema"
+  databricks schemas delete "$catalog.$schema" --force >/dev/null 2>&1 || true
+done
